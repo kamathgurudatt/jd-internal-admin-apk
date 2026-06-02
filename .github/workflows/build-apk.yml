@@ -30,19 +30,22 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      # react-native ships a validated gradle-wrapper.jar in its template.
-      # Copying it is faster and more reliable than generating a new one.
+      # Copy the validated wrapper jar that ships inside the react-native package.
       - name: Copy gradle-wrapper.jar from react-native template
         run: |
           mkdir -p android/gradle/wrapper
           cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
              android/gradle/wrapper/
-          ls -lh android/gradle/wrapper/
+          ls -lh android/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Set up Gradle 8.6
-        uses: gradle/actions/setup-gradle@v4
+      - name: Cache Gradle
+        uses: actions/cache@v4
         with:
-          gradle-version: '8.6'
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -62,6 +65,8 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Rename APK with date
         run: |
