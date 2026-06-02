@@ -37,6 +37,17 @@ jobs:
           cp "$JAR" android/gradle/wrapper/
           echo "Copied from: $JAR"
 
+      # Fix react-native-screens TypeSpec bug: accessibilityContainerViewIsModal has
+      # `undefined` type which the @react-native/codegen parser rejects. Fix to boolean.
+      - name: Patch react-native-screens TypeSpec undefined prop
+        run: |
+          find node_modules/react-native-screens -name "*.ts" -o -name "*.tsx" 2>/dev/null | \
+          xargs grep -l "accessibilityContainerViewIsModal.*undefined" 2>/dev/null | \
+          while read f; do
+            sed -i 's/accessibilityContainerViewIsModal: WithDefault<undefined,/accessibilityContainerViewIsModal: WithDefault<boolean,/g' "$f"
+            echo "Patched: $f"
+          done
+
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
           python3 << 'PYEOF'
