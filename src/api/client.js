@@ -3,9 +3,10 @@ import EncryptedStorage from 'react-native-encrypted-storage';
 // ── Baked-in server URL — change this before building the APK ─────────────────
 // TODO: Replace with your actual public endpoint before building
 // e.g. 'https://abc123.trycloudflare.com' or 'https://jd-admin.yourdomain.com'
-// ⚠️  172.29.137.139 is an intranet IP — only reachable inside the office network.
-// For outside access, expose this via Cloudflare Tunnel or ngrok and replace with the public URL.
-export const BASE_URL = 'http://172.29.137.139:8080';
+// Cloudflare Tunnel — accessible from anywhere, no VPN needed.
+// Note: trycloudflare.com URLs are temporary (change on restart).
+// For a permanent URL, set up a named tunnel with a Cloudflare account.
+export const BASE_URL = 'https://neon-solid-qualifications-armed.trycloudflare.com';
 
 const KEYS = {
   TOKEN: 'jd_bearer_token',
