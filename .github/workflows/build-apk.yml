@@ -36,25 +36,6 @@ jobs:
           cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
              android/gradle/wrapper/
 
-      - name: Inspect local react-native Android Maven repo
-        run: |
-          echo "=== com.facebook.react artifacts in local Maven repo ==="
-          ls node_modules/react-native/android/com/facebook/react/ 2>/dev/null || echo "No react artifacts found"
-          echo ""
-          echo "=== react-native artifact versions ==="
-          ls node_modules/react-native/android/com/facebook/react/react-native/ 2>/dev/null || echo "react-native dir not found"
-          echo ""
-          echo "=== react-android artifact versions ==="
-          ls node_modules/react-native/android/com/facebook/react/react-android/ 2>/dev/null || echo "react-android dir not found"
-          echo ""
-          echo "=== Check if BaseReactPackage is in react-android:0.73.6 AAR ==="
-          AAR="node_modules/react-native/android/com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
-          if [ -f "$AAR" ]; then
-            unzip -p "$AAR" classes.jar | jar tf /dev/stdin 2>/dev/null | grep BaseReactPackage || echo "(not found in classes.jar)"
-          else
-            echo "AAR not found at: $AAR"
-          fi
-
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
           cat > node_modules/@react-native/gradle-plugin/settings.gradle.kts << 'EOF'
@@ -101,6 +82,22 @@ jobs:
           print("OK" if 'serviceOf' not in ''.join(result) else "WARNING: serviceOf still present")
           PYEOF
 
+      # The local react-native/android Maven repo has NO artifacts. All com.facebook.react
+      # deps must come from Maven Central. Native modules declare the old 'react-native:+'
+      # artifact which no longer exists; replace with 'react-android:0.73.6' directly.
+      - name: Replace react-native:+ with react-android:0.73.6 in all native module build.gradle
+        run: |
+          PATCHED=0
+          while IFS= read -r -d '' f; do
+            if grep -q "com.facebook.react:react-native" "$f"; then
+              sed -i "s|com.facebook.react:react-native:+|com.facebook.react:react-android:0.73.6|g" "$f"
+              sed -i "s|com.facebook.react:react-native:[^\"']*|com.facebook.react:react-android:0.73.6|g" "$f"
+              PATCHED=$((PATCHED+1))
+              echo "Patched ($PATCHED): $f"
+            fi
+          done < <(find node_modules -name "build.gradle" -not -path "*/node_modules/react-native/android/*" -print0 2>/dev/null)
+          echo "Total: $PATCHED files patched"
+
       - name: Pre-compile @react-native/gradle-plugin
         working-directory: node_modules/@react-native/gradle-plugin
         run: |
@@ -122,3 +119,43 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK with date
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
