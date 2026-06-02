@@ -81,14 +81,13 @@ jobs:
           with open(fname) as f:
               content = f.read()
 
-          # Fix: make delegate type explicit so override constraint is satisfied
-          # Change: private val mDelegate = RNCSafeAreaProviderManagerDelegate(this)
-          # To:     private val mDelegate: ViewManagerDelegate<SafeAreaProvider> = RNCSafeAreaProviderManagerDelegate(this)
+          # Fix: both variable type AND constructor type parameter must be explicit.
+          # Kotlin 1.9 can't infer U from 'this' when the delegate has Java generic bounds.
           new_content = content.replace(
               'private val mDelegate = RNCSafeAreaProviderManagerDelegate(this)',
-              'private val mDelegate: com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = RNCSafeAreaProviderManagerDelegate(this)'
+              'private val mDelegate: com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = RNCSafeAreaProviderManagerDelegate<SafeAreaProviderManager>(this)'
           )
-          # Fix: explicit return type on getDelegate()
+          # Fix: explicit return type matching the base class override contract
           new_content = new_content.replace(
               'override fun getDelegate() = mDelegate',
               'override fun getDelegate(): com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = mDelegate'
