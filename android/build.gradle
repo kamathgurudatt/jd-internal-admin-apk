@@ -23,8 +23,17 @@ plugins {
     id("com.facebook.react.rootproject")
 }
 
-// Ensure all native module subprojects can resolve com.facebook.react:react-android
-// and other Maven Central artifacts even if rootproject plugin doesn't configure them.
+// Disable codegen for native module subprojects. In old-arch mode these tasks
+// fail on TypeSpec files with CT.* namespace-qualified types. The codegen output
+// is only needed for new architecture (turbo modules, JSI) which we're not using.
+subprojects {
+    tasks.configureEach { task ->
+        if (task.name.startsWith('generateCodegen') && task.project.name != 'app') {
+            task.enabled = false
+        }
+    }
+}
+
 allprojects {
     repositories {
         google()
