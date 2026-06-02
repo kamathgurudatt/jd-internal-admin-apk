@@ -14,45 +14,6 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.6.1")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
-        // Pre-compiled JAR injected by CI (see workflow pre-compile step).
-        classpath("com.google.code.gson:gson:2.8.9")
-        classpath("com.google.guava:guava:31.0.1-jre")
-        classpath("com.squareup:javapoet:1.13.0")
-        classpath files("../node_modules/@react-native/gradle-plugin/build/libs/react-native-gradle-plugin.jar")
-    }
-}
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url "$rootDir/../node_modules/react-native/android" }
-        maven { url "$rootDir/../node_modules/.cache/default-development" }
-    }
-
-    // react-native:+ → react-android:0.73.6
-    // In RN 0.71+, the Android library was renamed. Native modules still reference the old name.
-    configurations.configureEach {
-        resolutionStrategy.dependencySubstitution {
-            substitute module("com.facebook.react:react-native") using module("com.facebook.react:react-android:0.73.6") because "react-native renamed to react-android in RN 0.71+"
-        }
-        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-            if (details.requested.group == "com.facebook.react" && details.requested.name != "react-native") {
-                details.useVersion "0.73.6"
-            }
-        }
-    }
-}
-
-// Register afterEvaluate callbacks BEFORE applying rootproject plugin,
-// which triggers early subproject evaluation.
-subprojects {
-    afterEvaluate { proj ->
-        if (proj.plugins.hasPlugin("com.android.library")) {
-            proj.dependencies {
-                compileOnly "com.facebook.react:react-android:0.73.6"
-            }
-        }
     }
 }
 

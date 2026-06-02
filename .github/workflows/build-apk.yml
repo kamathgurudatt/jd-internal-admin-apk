@@ -30,34 +30,74 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Find correct Maven repo for react-android:0.73.6
+      # React Native 0.76 ships a wrapper jar in its template
+      - name: Copy gradle-wrapper.jar
         run: |
-          echo "=== react-android 0.73.x versions on Maven Central ==="
-          curl -s "https://repo.maven.apache.org/maven2/com/facebook/react/react-android/maven-metadata.xml" \
-            | grep -E "0\.73" | head -10 || echo "No 0.73.x versions on Maven Central"
+          mkdir -p android/gradle/wrapper
+          cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
+             android/gradle/wrapper/
+          ls -lh android/gradle/wrapper/gradle-wrapper.jar
 
-          echo ""
-          echo "=== react-native 0.73.x versions on Maven Central ==="
-          curl -s "https://repo.maven.apache.org/maven2/com/facebook/react/react-native/maven-metadata.xml" \
-            | grep -E "0\.73" | head -10 || echo "No 0.73.x versions on Maven Central"
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
-          echo ""
-          echo "=== Try Maven Central via https (follow redirects) ==="
-          curl -sL -o /dev/null -w "%{http_code} %{url_effective}" \
-            "https://search.maven.org/remotecontent?filepath=com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
-          echo ""
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
-          echo ""
-          echo "=== Check jitpack ==="
-          curl -s -o /dev/null -w "%{http_code}" \
-            "https://jitpack.io/com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
-          echo " (jitpack)"
+      - name: Generate debug keystore
+        working-directory: android/app
+        run: |
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
 
-          echo ""
-          echo "=== Check if react-android exists in ~/.gradle after npm install ==="
-          find ~/.gradle -name "react-android*.aar" 2>/dev/null | head -5 || echo "Not in Gradle cache"
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-          echo ""
-          echo "=== Find ALL AARs in entire node_modules for react-native ==="
-          find node_modules/react-native -name "*.aar" -o -name "*.jar" 2>/dev/null | grep -v node_modules | head -20
-          ls node_modules/react-native/ | head -20
+      - name: Rename APK with date
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
