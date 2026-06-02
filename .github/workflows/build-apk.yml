@@ -37,40 +37,6 @@ jobs:
           cp "$JAR" android/gradle/wrapper/
           echo "Copied from: $JAR"
 
-      # The codegen doesn't resolve namespace-qualified types like CT.WithDefault.
-      # Patch FullWindowOverlayNativeComponent.ts to use direct named imports.
-      - name: Patch react-native-screens FullWindowOverlayNativeComponent.ts
-        run: |
-          SPEC="node_modules/react-native-screens/src/fabric/FullWindowOverlayNativeComponent.ts"
-          if [ -f "$SPEC" ]; then
-            python3 << 'PYEOF'
-          import re, sys
-
-          fname = "node_modules/react-native-screens/src/fabric/FullWindowOverlayNativeComponent.ts"
-          with open(fname) as f:
-              content = f.read()
-
-          print("=== Original (first 20 lines) ===")
-          for i, line in enumerate(content.split('\n')[:20], 1):
-              print(f"{i}: {line}")
-
-          # Replace namespace import with named imports
-          # e.g.: import * as CT from 'react-native/Libraries/Types/CodegenTypes'
-          # →     import type {WithDefault, Float, Int32, Double, BubblingEventHandler, DirectEventHandler} from 'react-native/Libraries/Types/CodegenTypes'
-          content = re.sub(
-              r"import \* as CT from '(react-native/Libraries/Types/CodegenTypes)'",
-              r"import type {WithDefault, Float, Int32, Double, BubblingEventHandler, DirectEventHandler, UnsafeMixed} from '\1'",
-              content
-          )
-          # Replace CT.X with X
-          content = re.sub(r'\bCT\.', '', content)
-
-          with open(fname, 'w') as f:
-              f.write(content)
-          print("Patched successfully")
-          PYEOF
-          fi
-
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
           python3 << 'PYEOF'
