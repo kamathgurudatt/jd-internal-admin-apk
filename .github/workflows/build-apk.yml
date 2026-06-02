@@ -30,12 +30,18 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      # React Native 0.76 ships a wrapper jar in its template
+      # Find and copy the gradle-wrapper.jar from wherever react-native ships it
       - name: Copy gradle-wrapper.jar
         run: |
           mkdir -p android/gradle/wrapper
-          cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
-             android/gradle/wrapper/
+          JAR=$(find node_modules -name "gradle-wrapper.jar" 2>/dev/null | head -1)
+          if [ -n "$JAR" ]; then
+            cp "$JAR" android/gradle/wrapper/
+            echo "Copied from: $JAR"
+          else
+            echo "ERROR: gradle-wrapper.jar not found in node_modules"
+            exit 1
+          fi
           ls -lh android/gradle/wrapper/gradle-wrapper.jar
 
       - name: Cache Gradle
