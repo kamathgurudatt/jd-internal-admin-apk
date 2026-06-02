@@ -28,7 +28,7 @@ jobs:
           node-version: '20'
 
       - name: Install npm dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --fetch-retries 5 --fetch-retry-mintimeout 10000 --fetch-retry-maxtimeout 60000
 
       - name: Copy gradle-wrapper.jar
         run: |
