@@ -35,9 +35,7 @@ jobs:
           mkdir -p android/gradle/wrapper
           JAR=$(find node_modules -name "gradle-wrapper.jar" 2>/dev/null | head -1)
           cp "$JAR" android/gradle/wrapper/
-          echo "Copied from: $JAR"
 
-      # react-native-screens TypeSpec: CT.* namespace types fail in @react-native/codegen parser
       - name: Fix react-native-screens TypeSpec CT.* namespace imports
         run: |
           python3 << 'PYEOF'
@@ -64,12 +62,8 @@ jobs:
                       with open(path, 'w') as f:
                           f.write(new_content)
                       fixed += 1
-                      print(f"Fixed: {path}")
-          print(f"Total: {fixed} files fixed")
+          print(f"Total: {fixed} TypeSpec files fixed")
           PYEOF
-
-      # Note: kotlinVersion downgraded to 1.8.22 in build.gradle to match native module era.
-      # This avoids Kotlin 1.9 generic type inference strictness issues in safe-area-context.
 
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
@@ -96,9 +90,7 @@ jobs:
       - name: Setup Android NDK
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            --install "ndk;26.1.10909125" 2>/dev/null || \
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            --install "ndk;26.1.10909125" || true
+            --install "ndk;26.1.10909125" 2>/dev/null || true
           ls $ANDROID_HOME/ndk/ 2>/dev/null | head -3
 
       - name: Make gradlew executable
@@ -112,46 +104,11 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Build debug APK
+      # Compile safe-area-context first to get the generated delegate class
+      - name: Run codegen for safe-area-context + show generated delegate
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Rename APK with date
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk \
-            jd-admin-v1.0-$(date +%Y%m%d).apk
-
-      - name: Delete existing 'latest' tag & release
-        run: |
-          RELEASE_ID=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
-            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
-          git push origin :refs/tags/latest 2>/dev/null || true
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "JD Admin — Latest Build"
-          body: |
-            **JD Admin APK** — automated build from `main` branch.
-
-            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
-            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
-
-            ### Install
-            1. Download `jd-admin-*.apk` below
-            2. Copy to Android device
-            3. Settings → Security → **Install unknown apps** → allow Files
-            4. Tap the APK to install
-
-            ### First launch
-            - Enter **Bearer Token** (from `server.js`)
-            - Set a **4-digit PIN**
-          files: jd-admin-*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ./gradlew :react-native-safe-area-context:generateCodegenArtifactsFromSchema --no-daemon 2>&1 | tail -5 || true
+          echo "=== Generated delegate class ==="
+          find node_modules/react-native-safe-area-context/android/build -name "RNCSafeAreaProviderManagerDelegate*" 2>/dev/null | head -3
+          find node_modules/react-native-safe-area-context/android/build -name "RNCSafeAreaProviderManagerDelegate*.java" -exec head -10 {} \; 2>/dev/null
