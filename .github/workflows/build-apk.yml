@@ -91,7 +91,6 @@ jobs:
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             --install "ndk;26.1.10909125" 2>/dev/null || true
-          ls $ANDROID_HOME/ndk/ 2>/dev/null | head -3
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -104,11 +103,14 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      # Compile safe-area-context first to get the generated delegate class
-      - name: Run codegen for safe-area-context + show generated delegate
+      # Run partial build to generate the codegen artifacts, then show the delegate
+      - name: Show generated RNCSafeAreaProviderManagerDelegate
         working-directory: android
         run: |
-          ./gradlew :react-native-safe-area-context:generateCodegenArtifactsFromSchema --no-daemon 2>&1 | tail -5 || true
-          echo "=== Generated delegate class ==="
-          find node_modules/react-native-safe-area-context/android/build -name "RNCSafeAreaProviderManagerDelegate*" 2>/dev/null | head -3
-          find node_modules/react-native-safe-area-context/android/build -name "RNCSafeAreaProviderManagerDelegate*.java" -exec head -10 {} \; 2>/dev/null
+          ./gradlew :react-native-safe-area-context:generateCodegenSchemaFromJavaScript \
+            :react-native-safe-area-context:generateCodegenArtifactsFromSchema \
+            --no-daemon 2>&1 | tail -5
+          echo "=== RNCSafeAreaProviderManagerDelegate.java ==="
+          find node_modules/react-native-safe-area-context -name "RNCSafeAreaProviderManagerDelegate.java" 2>/dev/null | \
+            xargs cat 2>/dev/null | head -30 || echo "File not found"
+        continue-on-error: true
