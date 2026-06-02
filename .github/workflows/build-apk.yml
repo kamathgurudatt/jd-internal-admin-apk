@@ -36,16 +36,10 @@ jobs:
           cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
              android/gradle/wrapper/
 
-      - name: Inspect RN plugin gradle/ directory
-        run: |
-          echo "=== gradle/ contents ==="
-          ls -la node_modules/@react-native/gradle-plugin/gradle/
-          echo "=== libs.versions.toml ==="
-          cat node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml 2>/dev/null || echo "MISSING"
-          echo "=== build.gradle.kts (plugins block) ==="
-          grep -A5 "^plugins" node_modules/@react-native/gradle-plugin/build.gradle.kts 2>/dev/null || echo "not found"
-
-      - name: Patch RN plugin settings — remove foojay toolchain plugin
+      # Patch the included build's settings.gradle.kts:
+      #   1) Remove foojay JDK toolchain resolver (breaks in composite context)
+      #   2) Keep pluginManagement repos (already there)
+      - name: Patch RN plugin settings.gradle.kts
         run: |
           cat > node_modules/@react-native/gradle-plugin/settings.gradle.kts << 'EOF'
           pluginManagement {
@@ -58,25 +52,48 @@ jobs:
           rootProject.name = "react-native-gradle-plugin"
           EOF
 
-      - name: Provide libs.versions.toml if missing from npm package
+      # Patch build.gradle.kts:
+      #   Remove internal Gradle API imports (ModuleRegistry, serviceOf) and the
+      #   test-task block that uses them. These only affect test configuration
+      #   and cause compilation failure in composite build context.
+      - name: Patch RN plugin build.gradle.kts — remove internal Gradle APIs
         run: |
-          TOML="node_modules/@react-native/gradle-plugin/gradle/libs.versions.toml"
-          if [ ! -f "$TOML" ]; then
-            echo "Creating missing libs.versions.toml"
-            cat > "$TOML" << 'EOF'
-          [versions]
-          kotlin = "1.9.22"
-          agp = "8.1.4"
+          python3 << 'PYEOF'
+          import re, sys
 
-          [plugins]
-          kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-          EOF
-            echo "Created:"
-            cat "$TOML"
-          else
-            echo "Already exists:"
-            cat "$TOML"
-          fi
+          fname = "node_modules/@react-native/gradle-plugin/build.gradle.kts"
+          with open(fname) as f:
+              content = f.read()
+
+          # Remove internal API imports
+          content = re.sub(r'import org\.gradle\.api\.internal\.classpath\.ModuleRegistry\n', '', content)
+          content = re.sub(r'import org\.gradle\.configurationcache\.extensions\.serviceOf\n', '', content)
+
+          # Replace the entire tasks.withType<Test>() block (only affects test config)
+          # Pattern: from 'tasks.withType<Test>().configureEach {' to matching closing brace
+          content = re.sub(
+              r'tasks\.withType<Test>\(\)\.configureEach \{.*?\n\}',
+              '',
+              content,
+              flags=re.DOTALL
+          )
+
+          with open(fname, 'w') as f:
+              f.write(content)
+          print("Patched build.gradle.kts")
+          # Show imports remaining
+          for line in content.split('\n')[:10]:
+              print(line)
+          PYEOF
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
