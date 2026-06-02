@@ -38,8 +38,8 @@ android {
 }
 
 dependencies {
-    // BOM pins all com.facebook.react artifacts to 0.76.9 from Maven Central
-    implementation(platform("com.facebook.react:react-native-bom:0.76.9"))
+    // BOM pins all com.facebook.react artifacts to 0.79.7 from Maven Central
+    implementation(platform("com.facebook.react:react-native-bom:0.79.7"))
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 }

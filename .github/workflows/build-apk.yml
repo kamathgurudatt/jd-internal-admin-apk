@@ -30,13 +30,89 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Check which React Native versions are on Maven Central
+      - name: Copy gradle-wrapper.jar
         run: |
-          echo "=== ALL react-android versions on Maven Central ==="
-          curl -s "https://repo.maven.apache.org/maven2/com/facebook/react/react-android/maven-metadata.xml" \
-            | grep "<version>" | head -30
-          echo ""
-          echo "=== react-android-0.76.9 check ==="
-          curl -s -o /dev/null -w "%{http_code}" \
-            "https://repo.maven.apache.org/maven2/com/facebook/react/react-android/0.76.9/react-android-0.76.9.pom"
-          echo " (0.76.9 pom)"
+          mkdir -p android/gradle/wrapper
+          JAR=$(find node_modules -name "gradle-wrapper.jar" 2>/dev/null | head -1)
+          cp "$JAR" android/gradle/wrapper/
+          echo "Copied from: $JAR"
+
+      # RN 0.79 gradle-plugin still has foojay — patch it out for CI
+      - name: Patch RN plugin settings.gradle.kts — remove foojay
+        run: |
+          python3 << 'PYEOF'
+          import re
+          fname = "node_modules/@react-native/gradle-plugin/settings.gradle.kts"
+          with open(fname) as f:
+              content = f.read()
+          patched = re.sub(
+              r'\nplugins \{ id\("org\.gradle\.toolchains\.foojay-resolver-convention"\)[^\}]*\}\n',
+              '\n', content)
+          with open(fname, 'w') as f:
+              f.write(patched)
+          print("foojay removed:", "foojay" not in patched)
+          PYEOF
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Generate debug keystore
+        working-directory: android/app
+        run: |
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK with date
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
