@@ -30,20 +30,8 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Inspect @react-native/gradle-plugin package
-        run: |
-          echo "=== Package root ==="
-          ls -la node_modules/@react-native/gradle-plugin/
-          echo ""
-          echo "=== settings.gradle ==="
-          cat node_modules/@react-native/gradle-plugin/settings.gradle 2>/dev/null || echo "(not found)"
-          echo ""
-          echo "=== build.gradle.kts (first 20 lines) ==="
-          head -20 node_modules/@react-native/gradle-plugin/build.gradle.kts 2>/dev/null || echo "(not found)"
-          echo ""
-          echo "=== build/ dir ==="
-          ls node_modules/@react-native/gradle-plugin/build/ 2>/dev/null || echo "(no build/ dir)"
-
+      # The @react-native/gradle-plugin npm package ships settings.gradle.kts (Kotlin DSL)
+      # but not a pre-compiled JAR — Gradle 8.1.1 (RN 0.73's target version) can compile it.
       - name: Copy gradle-wrapper.jar from react-native template
         run: |
           mkdir -p android/gradle/wrapper
@@ -77,7 +65,7 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tail -200
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK with date
         run: |
@@ -102,6 +90,19 @@ jobs:
           name: "JD Admin — Latest Build"
           body: |
             **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
           files: jd-admin-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
