@@ -2,15 +2,11 @@ apply plugin: "com.android.application"
 apply plugin: "com.facebook.react"
 apply plugin: "org.jetbrains.kotlin.android"
 
-react {
-    // hermesEnabled set via gradle.properties
-}
-
 android {
-    ndkVersion    rootProject.ext.ndkVersion
+    ndkVersion        rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk    rootProject.ext.compileSdkVersion
-    namespace     "com.jdadminapp"
+    compileSdk        rootProject.ext.compileSdkVersion
+    namespace         "com.jdadminapp"
 
     defaultConfig {
         applicationId "com.jdadminapp"
@@ -42,6 +38,8 @@ android {
 }
 
 dependencies {
+    // Version managed by the React Native BOM published to Maven Central
+    implementation(platform("com.facebook.react:react-native-bom:0.73.6"))
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 }
