@@ -23,6 +23,10 @@ buildscript {
     }
 }
 
+// Configures all native module subprojects with the react-android dependency
+// and version management (required for BaseReactPackage to resolve).
+apply plugin: "com.facebook.react.rootproject"
+
 allprojects {
     repositories {
         google()
