@@ -82,6 +82,23 @@ jobs:
           print("OK" if 'serviceOf' not in ''.join(result) else "WARNING: serviceOf still present")
           PYEOF
 
+      # Use a Gradle init script (applied globally) to substitute react-native → react-android
+      # in ALL projects including composite-build subprojects that ignore allprojects{}.
+      - name: Create Gradle init script for react-native→react-android substitution
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/react-android-subst.gradle << 'INITEOF'
+          gradle.allprojects { proj ->
+              proj.configurations.configureEach { cfg ->
+                  cfg.resolutionStrategy.dependencySubstitution {
+                      substitute module("com.facebook.react:react-native") using module("com.facebook.react:react-android:0.73.6") because "react-native renamed to react-android in RN 0.71+"
+                  }
+              }
+          }
+          INITEOF
+          echo "Init script created:"
+          cat ~/.gradle/init.d/react-android-subst.gradle
+
       - name: Pre-compile @react-native/gradle-plugin
         working-directory: node_modules/@react-native/gradle-plugin
         run: |
