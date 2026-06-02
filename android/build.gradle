@@ -17,4 +17,8 @@ buildscript {
     }
 }
 
-apply plugin: "com.facebook.react.rootproject"
+// plugins{} syntax (not apply plugin:) is required for composite-build plugins
+// that are contributed via pluginManagement.includeBuild
+plugins {
+    id("com.facebook.react.rootproject")
+}
