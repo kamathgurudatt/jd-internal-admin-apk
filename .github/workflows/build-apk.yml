@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,10 +25,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # no cache: — no lock file in repo
 
       - name: Install npm dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.6'
 
       - name: Generate Gradle wrapper jar
         working-directory: android
@@ -33,15 +41,6 @@ jobs:
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Generate debug keystore
         working-directory: android/app
@@ -58,13 +57,30 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: Rename APK
+      - name: Rename APK with date
         run: |
-          mv android/app/build/outputs/apk/debug/app-debug.apk \
-             jd-admin-v1.0-$(date +%Y%m%d).apk
+          DATE=$(date +%Y%m%d)
+          cp android/app/build/outputs/apk/debug/app-debug.apk jd-admin-v1.0-${DATE}.apk
+          echo "APK_NAME=jd-admin-v1.0-${DATE}.apk" >> $GITHUB_ENV
 
-      - name: Create / update GitHub Release
+      - name: Delete existing 'latest' release (if any)
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | jq -r '.id // empty')
+          if [ -n "$RELEASE_ID" ]; then
+            curl -s -X DELETE \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
+          fi
+          # Delete the tag too
+          git push origin :refs/tags/latest || true
+
+      - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
@@ -72,16 +88,21 @@ jobs:
           body: |
             **JD Admin APK** — automated build from `main` branch.
 
+            > ⚠️ Current `BASE_URL` is set to the **intranet IP** `http://172.29.137.139:8080`.
+            > This APK only works on the office Wi-Fi. Update `src/api/client.js` with your
+            > public tunnel URL (Cloudflare Tunnel / ngrok) for outside-network access.
+
             ### Install
             1. Download `jd-admin-*.apk` below
-            2. Transfer to Android device
-            3. Enable *Install unknown apps* in Android Settings → Security
+            2. Transfer to your Android device (USB / Drive / WhatsApp to self)
+            3. On the device: Settings → Security → **Install unknown apps** → enable for Files
             4. Open the APK file to install
 
             ### First launch
-            - Enter your **Bearer Token** (from server.js)
-            - Set a **4-digit PIN** to secure the app
+            1. Enter your **Bearer Token** (from `server.js`)
+            2. Set a **4-digit PIN** to lock the app
+            3. Optionally enable biometric unlock
           prerelease: false
-          files: jd-admin-*.apk
+          files: ${{ env.APK_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
