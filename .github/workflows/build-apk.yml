@@ -49,21 +49,119 @@ jobs:
           rootProject.name = "react-native-gradle-plugin"
           EOF
 
-      - name: Show build.gradle.kts lines 40-80 and patch
+      # serviceOf<ModuleRegistry> is used ONLY in a testRuntimeOnly() dependency.
+      # Remove that multi-line call (paren-counting) + its imports.
+      # tasks.withType blocks are fine — they don't use serviceOf.
+      - name: Patch RN plugin build.gradle.kts — remove testRuntimeOnly(serviceOf)
         run: |
           python3 << 'PYEOF'
           fname = "node_modules/@react-native/gradle-plugin/build.gradle.kts"
           with open(fname) as f:
               lines = f.readlines()
 
-          # Show context around serviceOf usage
-          print("=== Lines 40-80 ===")
-          for i, l in enumerate(lines[39:79], start=40):
-              print(f"{i:3}: {l}", end='')
+          REMOVE_IMPORTS = {
+              'org.gradle.api.internal.classpath.ModuleRegistry',
+              'org.gradle.configurationcache.extensions.serviceOf',
+          }
 
-          # Find blocks containing serviceOf
-          print("\n=== Blocks containing serviceOf ===")
-          for i, line in enumerate(lines):
-              if 'tasks.withType' in line:
-                  print(f"Line {i+1}: {line.rstrip()}")
+          result = []
+          i = 0
+          while i < len(lines):
+              line = lines[i]
+
+              # Remove internal Gradle API imports
+              if any(imp in line for imp in REMOVE_IMPORTS):
+                  i += 1
+                  continue
+
+              # Remove testRuntimeOnly block that contains serviceOf (paren-counting)
+              if 'testRuntimeOnly' in line:
+                  lookahead = ''.join(lines[i:i+15])
+                  if 'serviceOf' in lookahead:
+                      depth = line.count('(') - line.count(')')
+                      i += 1
+                      while i < len(lines) and depth > 0:
+                          depth += lines[i].count('(') - lines[i].count(')')
+                          i += 1
+                      continue
+
+              result.append(line)
+              i += 1
+
+          with open(fname, 'w') as f:
+              f.writelines(result)
+
+          final = ''.join(result)
+          if 'serviceOf' in final:
+              print("WARNING: serviceOf still present")
+          else:
+              print("OK: serviceOf removed")
+          if 'ModuleRegistry' in final:
+              print("WARNING: ModuleRegistry still present")
+          else:
+              print("OK: ModuleRegistry removed")
           PYEOF
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Generate debug keystore
+        working-directory: android/app
+        run: |
+          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK with date
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
