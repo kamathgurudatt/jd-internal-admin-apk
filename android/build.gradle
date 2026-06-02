@@ -10,13 +10,10 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven { url "$rootDir/../node_modules/react-native/android" }
     }
     dependencies {
         classpath("com.android.tools.build:gradle:8.1.4")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
-        // Published to Maven Central — no Kotlin source compilation needed
-        classpath("com.facebook.react:react-native-gradle-plugin:0.73.6")
     }
 }
 
