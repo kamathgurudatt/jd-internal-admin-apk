@@ -82,13 +82,6 @@ jobs:
           print("OK" if 'serviceOf' not in ''.join(result) else "WARNING: serviceOf still present")
           PYEOF
 
-      - name: Show react-native-screens dependencies block
-        run: |
-          echo "=== Full react-native-screens/android/build.gradle ==="
-          cat node_modules/react-native-screens/android/build.gradle | grep -A30 "^dependencies {"
-          echo "=== Does file have react-android? ==="
-          grep "react-android\|react-native\|react_native" node_modules/react-native-screens/android/build.gradle || echo "(none)"
-
       - name: Pre-compile @react-native/gradle-plugin
         working-directory: node_modules/@react-native/gradle-plugin
         run: |
@@ -107,12 +100,46 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Check react-native-screens compile classpath
-        working-directory: android
-        run: |
-          ./gradlew :react-native-screens:dependencies --configuration debugCompileClasspath \
-            --no-daemon 2>&1 | grep -E "react-android|react-native|com.facebook" | head -20 || true
-
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK with date
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

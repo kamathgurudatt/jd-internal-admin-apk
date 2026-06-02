@@ -33,8 +33,16 @@ allprojects {
     configurations.configureEach {
         resolutionStrategy.eachDependency { DependencyResolveDetails details ->
             if (details.requested.group == "com.facebook.react") {
-                details.useVersion "0.73.6"
-                details.because "Pin react-android to 0.73.6 matching installed react-native"
+                // react-native:+ → react-android:0.73.6
+                // In React Native 0.71+, the library was renamed from react-native to react-android.
+                // Native modules still declare the old name; remap so BaseReactPackage resolves.
+                if (details.requested.name == "react-native") {
+                    details.useTarget "com.facebook.react:react-android:0.73.6"
+                    details.because "react-native renamed to react-android in RN 0.71+"
+                } else {
+                    details.useVersion "0.73.6"
+                    details.because "Pin all com.facebook.react artifacts to 0.73.6"
+                }
             }
         }
     }
