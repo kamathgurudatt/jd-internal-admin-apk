@@ -79,23 +79,32 @@ jobs:
               i += 1
           with open(fname, 'w') as f:
               f.writelines(result)
-          print("OK: serviceOf removed" if 'serviceOf' not in ''.join(result) else "WARNING: serviceOf still present")
+          print("OK" if 'serviceOf' not in ''.join(result) else "WARNING: serviceOf still present")
           PYEOF
 
-      # Native modules declare `react-android` without a version and rely on
-      # the plugin to inject it. Our setup doesn't do that injection, so patch
-      # every native module build.gradle to add the explicit 0.73.6 version.
-      - name: Pin react-android:0.73.6 in all native module build.gradle files
+      - name: Show native module build.gradle files (diagnostic)
         run: |
-          FIXED=0
-          while IFS= read -r -d '' f; do
-            if grep -q 'com.facebook.react:react-android[^:]' "$f"; then
-              sed -i 's|com.facebook.react:react-android"|com.facebook.react:react-android:0.73.6"|g' "$f"
-              FIXED=$((FIXED+1))
-              echo "Patched: $f"
+          echo "=== react-native-screens/android/build.gradle ==="
+          head -60 node_modules/react-native-screens/android/build.gradle 2>/dev/null || echo "not found"
+          echo "=== react-native-gesture-handler/android/build.gradle (first 40 lines) ==="
+          head -40 node_modules/react-native-gesture-handler/android/build.gradle 2>/dev/null || echo "not found"
+
+      # Inject react-android:0.73.6 into native modules that need BaseReactPackage.
+      # These modules use `apply plugin: "com.facebook.react"` which is supposed to
+      # inject the dependency, but our custom setup doesn't propagate it correctly.
+      - name: Inject react-android dependency into failing native modules
+        run: |
+          for MODULE in react-native-screens react-native-gesture-handler; do
+            BUILD="node_modules/$MODULE/android/build.gradle"
+            if [ -f "$BUILD" ] && ! grep -q "react-android" "$BUILD"; then
+              # Add at start of dependencies block
+              sed -i '/^dependencies {/a\    implementation "com.facebook.react:react-android:0.73.6"' "$BUILD"
+              echo "Injected into $MODULE"
+              head -5 "$BUILD"
+            elif [ -f "$BUILD" ]; then
+              echo "$MODULE already has react-android"
             fi
-          done < <(find node_modules -name "build.gradle" -path "*/android/*" -print0 2>/dev/null)
-          echo "Total patched: $FIXED"
+          done
 
       - name: Pre-compile @react-native/gradle-plugin
         working-directory: node_modules/@react-native/gradle-plugin
