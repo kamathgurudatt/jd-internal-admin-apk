@@ -23,8 +23,6 @@ buildscript {
     }
 }
 
-// Configures all native module subprojects with the react-android dependency
-// and version management (required for BaseReactPackage to resolve).
 apply plugin: "com.facebook.react.rootproject"
 
 allprojects {
@@ -33,5 +31,28 @@ allprojects {
         mavenCentral()
         maven { url "$rootDir/../node_modules/react-native/android" }
         maven { url "$rootDir/../node_modules/.cache/default-development" }
+    }
+
+    // Force react-android version across ALL subprojects so native modules
+    // resolve BaseReactPackage correctly (plugin doesn't always inject the version).
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == "com.facebook.react") {
+                details.useVersion "0.73.6"
+                details.because "Pin react-android to 0.73.6 matching installed react-native"
+            }
+        }
+    }
+}
+
+// Explicitly add react-android:0.73.6 compile dependency to every Android library
+// subproject so Kotlin can resolve com.facebook.react.BaseReactPackage.
+subprojects {
+    afterEvaluate { proj ->
+        if (proj.plugins.hasPlugin("com.android.library")) {
+            proj.dependencies {
+                compileOnly "com.facebook.react:react-android:0.73.6"
+            }
+        }
     }
 }
