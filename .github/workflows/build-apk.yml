@@ -36,10 +36,7 @@ jobs:
           cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
              android/gradle/wrapper/
 
-      # Patch the included build's settings.gradle.kts:
-      #   1) Remove foojay JDK toolchain resolver (breaks in composite context)
-      #   2) Keep pluginManagement repos (already there)
-      - name: Patch RN plugin settings.gradle.kts
+      - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
           cat > node_modules/@react-native/gradle-plugin/settings.gradle.kts << 'EOF'
           pluginManagement {
@@ -52,38 +49,51 @@ jobs:
           rootProject.name = "react-native-gradle-plugin"
           EOF
 
-      # Patch build.gradle.kts:
-      #   Remove internal Gradle API imports (ModuleRegistry, serviceOf) and the
-      #   test-task block that uses them. These only affect test configuration
-      #   and cause compilation failure in composite build context.
-      - name: Patch RN plugin build.gradle.kts — remove internal Gradle APIs
+      # Show build.gradle.kts around line 52 to understand the serviceOf context,
+      # then patch to remove ALL internal-API blocks (test tasks, KotlinCompile tasks).
+      - name: Patch RN plugin build.gradle.kts
         run: |
           python3 << 'PYEOF'
-          import re, sys
+          import re
 
           fname = "node_modules/@react-native/gradle-plugin/build.gradle.kts"
           with open(fname) as f:
               content = f.read()
 
-          # Remove internal API imports
-          content = re.sub(r'import org\.gradle\.api\.internal\.classpath\.ModuleRegistry\n', '', content)
-          content = re.sub(r'import org\.gradle\.configurationcache\.extensions\.serviceOf\n', '', content)
+          # Show lines around line 52
+          lines = content.split('\n')
+          for i, l in enumerate(lines[45:60], start=46):
+              print(f"{i}: {l}")
+          print("---")
 
-          # Replace the entire tasks.withType<Test>() block (only affects test config)
-          # Pattern: from 'tasks.withType<Test>().configureEach {' to matching closing brace
+          # Remove ALL internal Gradle API imports
+          for imp in [
+              r'import org\.gradle\.api\.internal\.classpath\.ModuleRegistry\n',
+              r'import org\.gradle\.configurationcache\.extensions\.serviceOf\n',
+              r'import org\.gradle\.api\.tasks\.testing\.logging\.TestExceptionFormat\n',
+          ]:
+              content = re.sub(imp, '', content)
+
+          # Remove ALL tasks blocks that contain serviceOf (multiline, non-greedy within block)
+          # Remove tasks.withType<Test>() block
           content = re.sub(
-              r'tasks\.withType<Test>\(\)\.configureEach \{.*?\n\}',
-              '',
-              content,
-              flags=re.DOTALL
-          )
+              r'\ntasks\.withType<Test>\(\)\.configureEach \{[^}]*(?:\{[^}]*\}[^}]*)*\}',
+              '', content, flags=re.DOTALL)
+          # Remove tasks.withType<KotlinCompile>() block
+          content = re.sub(
+              r'\ntasks\.withType<KotlinCompile>\(\)\.configureEach \{[^}]*(?:\{[^}]*\}[^}]*)*\}',
+              '', content, flags=re.DOTALL)
+          # Remove any standalone lines with serviceOf
+          content = re.sub(r'.*serviceOf.*\n', '', content)
 
           with open(fname, 'w') as f:
               f.write(content)
-          print("Patched build.gradle.kts")
-          # Show imports remaining
-          for line in content.split('\n')[:10]:
-              print(line)
+
+          # Verify no more serviceOf
+          if 'serviceOf' in content:
+              print("WARNING: serviceOf still present!")
+          else:
+              print("Patched successfully — no serviceOf remaining")
           PYEOF
 
       - name: Cache Gradle
