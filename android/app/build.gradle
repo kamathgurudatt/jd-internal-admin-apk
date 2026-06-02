@@ -44,5 +44,5 @@ dependencies {
     implementation("com.facebook.react:hermes-android")
 }
 
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
-applyNativeModulesAppBuildGradle(project)
+// In React Native 0.76, autolinking is handled by the com.facebook.react plugin
+// via autolinkLibrariesFromCommand() in settings.gradle — no manual native_modules.gradle needed.
