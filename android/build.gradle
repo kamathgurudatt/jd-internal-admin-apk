@@ -14,6 +14,13 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.1.4")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        // Pre-compiled JAR injected by CI (see workflow pre-compile step).
+        // Deps that the RN Gradle plugin requires at runtime:
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.0")
+        classpath("com.google.code.gson:gson:2.8.9")
+        classpath("com.google.guava:guava:31.0.1-jre")
+        classpath("com.squareup:javapoet:1.13.0")
+        classpath files("../node_modules/@react-native/gradle-plugin/build/libs/react-native-gradle-plugin.jar")
     }
 }
 

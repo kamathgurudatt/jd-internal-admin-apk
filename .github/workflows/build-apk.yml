@@ -36,71 +36,16 @@ jobs:
           cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
              android/gradle/wrapper/
 
-      - name: Patch RN plugin settings.gradle.kts — remove foojay
+      # Pre-compile the RN Gradle plugin using its own ./gradlew (which works).
+      # The resulting JAR is then injected into the parent's buildscript classpath,
+      # avoiding the problematic includeBuild composite build approach entirely.
+      - name: Pre-compile @react-native/gradle-plugin
+        working-directory: node_modules/@react-native/gradle-plugin
         run: |
-          cat > node_modules/@react-native/gradle-plugin/settings.gradle.kts << 'EOF'
-          pluginManagement {
-              repositories {
-                  gradlePluginPortal()
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "react-native-gradle-plugin"
-          EOF
-
-      # serviceOf<ModuleRegistry> is used ONLY in a testRuntimeOnly() dependency.
-      # Remove that multi-line call (paren-counting) + its imports.
-      # tasks.withType blocks are fine — they don't use serviceOf.
-      - name: Patch RN plugin build.gradle.kts — remove testRuntimeOnly(serviceOf)
-        run: |
-          python3 << 'PYEOF'
-          fname = "node_modules/@react-native/gradle-plugin/build.gradle.kts"
-          with open(fname) as f:
-              lines = f.readlines()
-
-          REMOVE_IMPORTS = {
-              'org.gradle.api.internal.classpath.ModuleRegistry',
-              'org.gradle.configurationcache.extensions.serviceOf',
-          }
-
-          result = []
-          i = 0
-          while i < len(lines):
-              line = lines[i]
-
-              # Remove internal Gradle API imports
-              if any(imp in line for imp in REMOVE_IMPORTS):
-                  i += 1
-                  continue
-
-              # Remove testRuntimeOnly block that contains serviceOf (paren-counting)
-              if 'testRuntimeOnly' in line:
-                  lookahead = ''.join(lines[i:i+15])
-                  if 'serviceOf' in lookahead:
-                      depth = line.count('(') - line.count(')')
-                      i += 1
-                      while i < len(lines) and depth > 0:
-                          depth += lines[i].count('(') - lines[i].count(')')
-                          i += 1
-                      continue
-
-              result.append(line)
-              i += 1
-
-          with open(fname, 'w') as f:
-              f.writelines(result)
-
-          final = ''.join(result)
-          if 'serviceOf' in final:
-              print("WARNING: serviceOf still present")
-          else:
-              print("OK: serviceOf removed")
-          if 'ModuleRegistry' in final:
-              print("WARNING: ModuleRegistry still present")
-          else:
-              print("OK: ModuleRegistry removed")
-          PYEOF
+          chmod +x gradlew
+          ./gradlew jar --no-daemon 2>&1 | tail -10
+          echo "=== JAR files ==="
+          ls -lh build/libs/
 
       - name: Cache Gradle
         uses: actions/cache@v4
