@@ -30,21 +30,19 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
+      # react-native ships a validated gradle-wrapper.jar in its template.
+      # Copying it is faster and more reliable than generating a new one.
+      - name: Copy gradle-wrapper.jar from react-native template
+        run: |
+          mkdir -p android/gradle/wrapper
+          cp node_modules/react-native/template/android/gradle/wrapper/gradle-wrapper.jar \
+             android/gradle/wrapper/
+          ls -lh android/gradle/wrapper/
+
       - name: Set up Gradle 8.6
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.6'
-
-      - name: Generate gradle-wrapper.jar (minimal temp project)
-        run: |
-          mkdir -p /tmp/wrapgen
-          echo "rootProject.name = 'wrapgen'" > /tmp/wrapgen/settings.gradle
-          printf 'wrapper { gradleVersion = "8.6"; distributionType = Wrapper.DistributionType.ALL }' \
-            > /tmp/wrapgen/build.gradle
-          gradle -p /tmp/wrapgen wrapper
-          mkdir -p android/gradle/wrapper
-          cp /tmp/wrapgen/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/
-          echo "Wrapper jar: $(ls -lh android/gradle/wrapper/gradle-wrapper.jar)"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -90,7 +88,7 @@ jobs:
             **JD Admin APK** — automated build from `main` branch.
 
             > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
-            > Works on office Wi-Fi. For outside access, set up a public tunnel and update `src/api/client.js`.
+            > Works on office Wi-Fi. For outside access, update `src/api/client.js` with a public tunnel URL.
 
             ### Install
             1. Download `jd-admin-*.apk` below
