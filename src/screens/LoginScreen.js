@@ -25,7 +25,7 @@ export default function LoginScreen() {
   const [lockout,    setLockout]    = useState(0);
   const [errMsg,     setErrMsg]     = useState('');
   const shakeX = useRef(new Animated.Value(0)).current;
-  const rnBio  = useRef(new ReactNativeBiometrics()).current;
+  const rnBio  = useRef((() => { try { return new ReactNativeBiometrics(); } catch { return null; } })()).current;
 
   useEffect(() => {
     if (lockout <= 0) return;
@@ -43,6 +43,7 @@ export default function LoginScreen() {
   }, [shakeX]);
 
   const tryBiometric = useCallback(async () => {
+    if (!rnBio) return;
     try {
       const {success} = await rnBio.simplePrompt({promptMessage: 'Unlock JD Admin'});
       if (success) setIsAuthenticated(true);
