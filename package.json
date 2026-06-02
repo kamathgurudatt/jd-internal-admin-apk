@@ -26,6 +26,8 @@
     "@babel/runtime": "^7.20.0",
     "@react-native/babel-preset": "^0.79.7",
     "@react-native/metro-config": "^0.79.7",
+    "@react-native-community/cli": "15.0.1",
+    "@react-native-community/cli-platform-android": "15.0.1",
     "babel-jest": "^29.6.3"
   }
 }
