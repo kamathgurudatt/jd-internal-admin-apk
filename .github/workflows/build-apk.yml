@@ -49,51 +49,71 @@ jobs:
           rootProject.name = "react-native-gradle-plugin"
           EOF
 
-      # Show build.gradle.kts around line 52 to understand the serviceOf context,
-      # then patch to remove ALL internal-API blocks (test tasks, KotlinCompile tasks).
-      - name: Patch RN plugin build.gradle.kts
+      # Use brace-counting to correctly remove entire blocks containing serviceOf.
+      # These blocks only affect test/compile task configuration, not plugin registration.
+      - name: Patch RN plugin build.gradle.kts — brace-counted block removal
         run: |
           python3 << 'PYEOF'
           import re
 
           fname = "node_modules/@react-native/gradle-plugin/build.gradle.kts"
           with open(fname) as f:
-              content = f.read()
+              lines = f.readlines()
 
-          # Show lines around line 52
-          lines = content.split('\n')
-          for i, l in enumerate(lines[45:60], start=46):
-              print(f"{i}: {l}")
-          print("---")
+          # Remove import lines for internal Gradle APIs
+          REMOVE_IMPORTS = {
+              'org.gradle.api.internal.classpath.ModuleRegistry',
+              'org.gradle.configurationcache.extensions.serviceOf',
+          }
 
-          # Remove ALL internal Gradle API imports
-          for imp in [
-              r'import org\.gradle\.api\.internal\.classpath\.ModuleRegistry\n',
-              r'import org\.gradle\.configurationcache\.extensions\.serviceOf\n',
-              r'import org\.gradle\.api\.tasks\.testing\.logging\.TestExceptionFormat\n',
-          ]:
-              content = re.sub(imp, '', content)
+          # Blocks to remove: any top-level block whose header contains these patterns
+          REMOVE_BLOCK_PATTERNS = [
+              'tasks.withType<KotlinCompile>',
+              'tasks.withType<Test>',
+          ]
 
-          # Remove ALL tasks blocks that contain serviceOf (multiline, non-greedy within block)
-          # Remove tasks.withType<Test>() block
-          content = re.sub(
-              r'\ntasks\.withType<Test>\(\)\.configureEach \{[^}]*(?:\{[^}]*\}[^}]*)*\}',
-              '', content, flags=re.DOTALL)
-          # Remove tasks.withType<KotlinCompile>() block
-          content = re.sub(
-              r'\ntasks\.withType<KotlinCompile>\(\)\.configureEach \{[^}]*(?:\{[^}]*\}[^}]*)*\}',
-              '', content, flags=re.DOTALL)
-          # Remove any standalone lines with serviceOf
-          content = re.sub(r'.*serviceOf.*\n', '', content)
+          result = []
+          i = 0
+          while i < len(lines):
+              line = lines[i]
+
+              # Skip import lines
+              skip_import = any(imp in line for imp in REMOVE_IMPORTS)
+              if skip_import:
+                  i += 1
+                  continue
+
+              # Skip entire blocks whose header matches remove patterns
+              if any(pat in line for pat in REMOVE_BLOCK_PATTERNS):
+                  # Count braces to find end of block
+                  depth = line.count('{') - line.count('}')
+                  i += 1
+                  while i < len(lines) and depth > 0:
+                      depth += lines[i].count('{') - lines[i].count('}')
+                      i += 1
+                  continue
+
+              # Skip any remaining standalone serviceOf lines
+              if 'serviceOf' in line:
+                  i += 1
+                  continue
+
+              result.append(line)
+              i += 1
 
           with open(fname, 'w') as f:
-              f.write(content)
+              f.writelines(result)
 
-          # Verify no more serviceOf
-          if 'serviceOf' in content:
-              print("WARNING: serviceOf still present!")
+          # Verify
+          final = ''.join(result)
+          if 'serviceOf' in final:
+              print("WARNING: serviceOf still in file")
           else:
-              print("Patched successfully — no serviceOf remaining")
+              print("OK: no serviceOf remaining")
+
+          # Show what was kept (imports section)
+          for j, l in enumerate(result[:15]):
+              print(f"{j+1}: {l}", end='')
           PYEOF
 
       - name: Cache Gradle
