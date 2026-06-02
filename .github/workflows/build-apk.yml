@@ -78,14 +78,8 @@ jobs:
           print("foojay removed:", "foojay" not in patched)
           PYEOF
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper/dists
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
+      # NO cache — fresh build forces codegen to regenerate all delegate classes.
+      # Stale cached delegates from previous safe-area-context versions cause type mismatches.
 
       - name: Setup Android NDK
         run: |
@@ -103,14 +97,46 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      # Run partial build to generate the codegen artifacts, then show the delegate
-      - name: Show generated RNCSafeAreaProviderManagerDelegate
+      - name: Build debug APK (no build cache)
         working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
+
+      - name: Rename APK with date
         run: |
-          ./gradlew :react-native-safe-area-context:generateCodegenSchemaFromJavaScript \
-            :react-native-safe-area-context:generateCodegenArtifactsFromSchema \
-            --no-daemon 2>&1 | tail -5
-          echo "=== RNCSafeAreaProviderManagerDelegate.java ==="
-          find node_modules/react-native-safe-area-context -name "RNCSafeAreaProviderManagerDelegate.java" 2>/dev/null | \
-            xargs cat 2>/dev/null | head -30 || echo "File not found"
-        continue-on-error: true
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
