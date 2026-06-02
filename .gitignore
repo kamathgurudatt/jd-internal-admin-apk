@@ -1,0 +1,21 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/gradle/wrapper/gradle-wrapper.jar
+android/app/debug.keystore
+
+# React Native
+.bundle/
+*.jks
+*.keystore
+
+# Metro
+.metro-health-check*
+
+# OS
+.DS_Store
+Thumbs.db
