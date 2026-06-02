@@ -47,15 +47,6 @@ jobs:
           echo "=== JAR files ==="
           ls -lh build/libs/
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper/dists
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
