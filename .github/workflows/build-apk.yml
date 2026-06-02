@@ -37,17 +37,25 @@ jobs:
              android/gradle/wrapper/
           ls -lh android/gradle/wrapper/gradle-wrapper.jar
 
-      # Pre-compile @react-native/gradle-plugin using its own gradlew.
-      # The plugin's own build has proper default plugin repos (Gradle Plugin Portal),
-      # so it can resolve kotlin.jvm correctly. The parent includeBuild then sees
-      # the compiled JAR as UP-TO-DATE and skips recompilation.
-      - name: Pre-compile @react-native/gradle-plugin
-        working-directory: node_modules/@react-native/gradle-plugin
+      # An init script in ~/.gradle/init.d/ runs beforeSettings on EVERY build
+      # in a composite build — including the @react-native/gradle-plugin includeBuild.
+      # This ensures gradlePluginPortal() is available when kotlin.jvm is resolved.
+      - name: Inject Gradle init script for composite-build plugin repos
         run: |
-          chmod +x gradlew
-          ./gradlew jar --no-daemon --stacktrace 2>&1 | tail -30
-          echo "=== Built artifacts ==="
-          ls build/libs/ 2>/dev/null && echo "OK" || echo "WARNING: no build/libs found"
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/plugin-repos.gradle << 'INITEOF'
+          beforeSettings { settings ->
+              settings.pluginManagement {
+                  repositories {
+                      gradlePluginPortal()
+                      google()
+                      mavenCentral()
+                  }
+              }
+          }
+          INITEOF
+          echo "Init script:"
+          cat ~/.gradle/init.d/plugin-repos.gradle
 
       - name: Cache Gradle
         uses: actions/cache@v4
