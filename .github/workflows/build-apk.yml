@@ -37,16 +37,34 @@ jobs:
           cp "$JAR" android/gradle/wrapper/
           echo "Copied from: $JAR"
 
-      # Fix react-native-screens TypeSpec bug: accessibilityContainerViewIsModal has
-      # `undefined` type which the @react-native/codegen parser rejects. Fix to boolean.
-      - name: Patch react-native-screens TypeSpec undefined prop
+      # react-native-screens has TypeSpec props with WithDefault<undefined,> which
+      # @react-native/codegen rejects. Scan ALL .ts/.tsx files and fix to boolean.
+      - name: Patch react-native-screens TypeSpec undefined props
         run: |
-          find node_modules/react-native-screens -name "*.ts" -o -name "*.tsx" 2>/dev/null | \
-          xargs grep -l "accessibilityContainerViewIsModal.*undefined" 2>/dev/null | \
-          while read f; do
-            sed -i 's/accessibilityContainerViewIsModal: WithDefault<undefined,/accessibilityContainerViewIsModal: WithDefault<boolean,/g' "$f"
-            echo "Patched: $f"
-          done
+          python3 << 'PYEOF'
+          import os, re
+
+          ROOT = "node_modules/react-native-screens"
+          fixed = 0
+          for root, dirs, files in os.walk(ROOT):
+              dirs[:] = [d for d in dirs if d not in ('node_modules', '__tests__', '.git')]
+              for fname in files:
+                  if not (fname.endswith('.ts') or fname.endswith('.tsx')):
+                      continue
+                  path = os.path.join(root, fname)
+                  try:
+                      with open(path, 'r', errors='replace') as f:
+                          content = f.read()
+                  except Exception:
+                      continue
+                  new_content = re.sub(r'WithDefault<undefined\b', 'WithDefault<boolean', content)
+                  if new_content != content:
+                      with open(path, 'w') as f:
+                          f.write(new_content)
+                      fixed += 1
+                      print(f"Fixed: {path}")
+          print(f"Total: {fixed} files patched")
+          PYEOF
 
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |

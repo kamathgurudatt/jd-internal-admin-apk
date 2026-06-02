@@ -18,7 +18,32 @@ buildscript {
 }
 
 // plugins{} syntax (not apply plugin:) is required for composite-build plugins
-// that are contributed via pluginManagement.includeBuild
+// contributed via pluginManagement.includeBuild
 plugins {
     id("com.facebook.react.rootproject")
+}
+
+// Ensure all native module subprojects can resolve com.facebook.react:react-android
+// and other Maven Central artifacts even if rootproject plugin doesn't configure them.
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "$rootDir/../node_modules/react-native/android" }
+    }
+
+    // Remap com.facebook.react:react-native:+ → react-android:0.79.7
+    // Native modules still declare the old artifact name.
+    configurations.configureEach {
+        resolutionStrategy.dependencySubstitution {
+            substitute module("com.facebook.react:react-native") \
+                using module("com.facebook.react:react-android:0.79.7") \
+                because "react-native renamed to react-android in RN 0.71+"
+        }
+        resolutionStrategy.eachDependency { DependencyResolveDetails d ->
+            if (d.requested.group == "com.facebook.react" && d.requested.name != "react-native") {
+                d.useVersion "0.79.7"
+            }
+        }
+    }
 }
