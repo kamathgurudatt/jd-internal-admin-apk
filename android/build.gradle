@@ -23,17 +23,6 @@ plugins {
     id("com.facebook.react.rootproject")
 }
 
-// Disable codegen for native module subprojects. In old-arch mode these tasks
-// fail on TypeSpec files with CT.* namespace-qualified types. The codegen output
-// is only needed for new architecture (turbo modules, JSI) which we're not using.
-subprojects {
-    tasks.configureEach { task ->
-        if (task.name.startsWith('generateCodegen') && task.project.name != 'app') {
-            task.enabled = false
-        }
-    }
-}
-
 allprojects {
     repositories {
         google()
