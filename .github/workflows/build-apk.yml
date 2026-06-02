@@ -30,21 +30,34 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Find react-android AAR anywhere in node_modules
+      - name: Find correct Maven repo for react-android:0.73.6
         run: |
-          echo "=== Looking for react-android AARs ==="
-          find node_modules/react-native -name "*.aar" 2>/dev/null | head -10
+          echo "=== react-android 0.73.x versions on Maven Central ==="
+          curl -s "https://repo.maven.apache.org/maven2/com/facebook/react/react-android/maven-metadata.xml" \
+            | grep -E "0\.73" | head -10 || echo "No 0.73.x versions on Maven Central"
+
           echo ""
-          echo "=== node_modules/react-native/android/ (top level) ==="
-          ls -la node_modules/react-native/android/ 2>/dev/null | head -20
+          echo "=== react-native 0.73.x versions on Maven Central ==="
+          curl -s "https://repo.maven.apache.org/maven2/com/facebook/react/react-native/maven-metadata.xml" \
+            | grep -E "0\.73" | head -10 || echo "No 0.73.x versions on Maven Central"
+
           echo ""
-          echo "=== Maven metadata for react-android on Maven Central ==="
-          curl -s "https://repo.maven.apache.org/maven2/com/facebook/react/react-android/maven-metadata.xml" | grep "<version>" | tail -5 || echo "Not found on Maven Central"
+          echo "=== Try Maven Central via https (follow redirects) ==="
+          curl -sL -o /dev/null -w "%{http_code} %{url_effective}" \
+            "https://search.maven.org/remotecontent?filepath=com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
           echo ""
-          echo "=== Check Sonatype Central ==="
-          curl -s -o /dev/null -w "%{http_code}" "https://search.maven.org/remotecontent?filepath=com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
-          echo " (Sonatype HTTP status)"
+
           echo ""
-          echo "=== Check S01 Sonatype ==="
-          curl -s -o /dev/null -w "%{http_code}" "https://s01.oss.sonatype.org/service/local/repositories/releases/content/com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
-          echo " (S01 Sonatype HTTP status)"
+          echo "=== Check jitpack ==="
+          curl -s -o /dev/null -w "%{http_code}" \
+            "https://jitpack.io/com/facebook/react/react-android/0.73.6/react-android-0.73.6.aar"
+          echo " (jitpack)"
+
+          echo ""
+          echo "=== Check if react-android exists in ~/.gradle after npm install ==="
+          find ~/.gradle -name "react-android*.aar" 2>/dev/null | head -5 || echo "Not in Gradle cache"
+
+          echo ""
+          echo "=== Find ALL AARs in entire node_modules for react-native ==="
+          find node_modules/react-native -name "*.aar" -o -name "*.jar" 2>/dev/null | grep -v node_modules | head -20
+          ls node_modules/react-native/ | head -20
