@@ -65,6 +65,32 @@ jobs:
           print(f"Total: {fixed} TypeSpec files fixed")
           PYEOF
 
+      # The generated RNCSafeAreaProviderManagerDelegate<T extends View, U extends BaseViewManagerInterface<T>>
+      # has TWO type parameters. Kotlin can't infer both from 'this'. Specify both explicitly.
+      - name: Fix safe-area-context SafeAreaProviderManager.kt — two type params
+        run: |
+          python3 << 'PYEOF'
+          fname = "node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaProviderManager.kt"
+          with open(fname) as f:
+              content = f.read()
+          # The delegate class signature is:
+          # RNCSafeAreaProviderManagerDelegate<T extends View, U extends BaseViewManagerInterface<T> & RNCSafeAreaProviderManagerInterface<T>>
+          # So we need: RNCSafeAreaProviderManagerDelegate<SafeAreaProvider, SafeAreaProviderManager>(this)
+          new_content = content.replace(
+              'private val mDelegate = RNCSafeAreaProviderManagerDelegate(this)',
+              'private val mDelegate = RNCSafeAreaProviderManagerDelegate<SafeAreaProvider, SafeAreaProviderManager>(this)'
+          )
+          with open(fname, 'w') as f:
+              f.write(new_content)
+          changed = new_content != content
+          print("Patched:", changed)
+          if changed:
+              import re
+              lines = new_content.split('\n')
+              for i, l in enumerate(lines[11:19], 12):
+                  print(f"{i}: {l}")
+          PYEOF
+
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
           python3 << 'PYEOF'
@@ -94,17 +120,46 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Build partial (to generate codegen artifacts)
+      - name: Build debug APK
         working-directory: android
-        run: |
-          ./gradlew :react-native-safe-area-context:compileDebugKotlin --no-daemon --no-build-cache --stacktrace 2>&1 | \
-            grep -E "Cannot infer|Unresolved|error:|FAILURE|BUILD" | head -10 || true
-        continue-on-error: true
+        run: ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
 
-      - name: Show generated RNCSafeAreaProviderManagerDelegate class
+      - name: Rename APK with date
         run: |
-          echo "=== Finding delegate ==="
-          find node_modules/react-native-safe-area-context -name "RNCSafeAreaProviderManagerDelegate*" 2>/dev/null
-          echo "=== Class content ==="
-          find node_modules/react-native-safe-area-context -name "RNCSafeAreaProviderManagerDelegate.java" -exec head -30 {} \; 2>/dev/null || echo "Java file not found"
-          find node_modules/react-native-safe-area-context -name "RNCSafeAreaProviderManagerDelegate.kt" -exec head -30 {} \; 2>/dev/null || echo "Kotlin file not found"
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
+
+      - name: Delete existing 'latest' tag & release
+        run: |
+          RELEASE_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "JD Admin — Latest Build"
+          body: |
+            **JD Admin APK** — automated build from `main` branch.
+
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+
+            ### Install
+            1. Download `jd-admin-*.apk` below
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files
+            4. Tap the APK to install
+
+            ### First launch
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
