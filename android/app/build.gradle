@@ -2,6 +2,12 @@ apply plugin: "com.android.application"
 apply plugin: "com.facebook.react"
 apply plugin: "org.jetbrains.kotlin.android"
 
+react {
+    // In RN 0.79, CLI is bundled inside react-native package (not @react-native-community/cli)
+    cliFile = file("../../node_modules/react-native/cli.js")
+    nodeExecutableAndArgs = ["node"]
+}
+
 android {
     ndkVersion        rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
