@@ -6,6 +6,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ANDROID_HOME: /usr/local/lib/android/sdk
 
 jobs:
   build:
@@ -25,19 +26,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # no cache: — no lock file in repo
 
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.6
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.6'
 
-      - name: Generate Gradle wrapper jar
-        working-directory: android
-        run: gradle wrapper --gradle-version 8.6 --distribution-type all
+      - name: Generate gradle-wrapper.jar (minimal temp project)
+        run: |
+          mkdir -p /tmp/wrapgen
+          echo "rootProject.name = 'wrapgen'" > /tmp/wrapgen/settings.gradle
+          printf 'wrapper { gradleVersion = "8.6"; distributionType = Wrapper.DistributionType.ALL }' \
+            > /tmp/wrapgen/build.gradle
+          gradle -p /tmp/wrapgen wrapper
+          mkdir -p android/gradle/wrapper
+          cp /tmp/wrapgen/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/
+          echo "Wrapper jar: $(ls -lh android/gradle/wrapper/gradle-wrapper.jar)"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -56,31 +63,25 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK with date
         run: |
-          DATE=$(date +%Y%m%d)
-          cp android/app/build/outputs/apk/debug/app-debug.apk jd-admin-v1.0-${DATE}.apk
-          echo "APK_NAME=jd-admin-v1.0-${DATE}.apk" >> $GITHUB_ENV
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            jd-admin-v1.0-$(date +%Y%m%d).apk
 
-      - name: Delete existing 'latest' release (if any)
+      - name: Delete existing 'latest' tag & release
         run: |
           RELEASE_ID=$(curl -s \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
-            | jq -r '.id // empty')
-          if [ -n "$RELEASE_ID" ]; then
-            curl -s -X DELETE \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
-          fi
-          # Delete the tag too
-          git push origin :refs/tags/latest || true
+            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
 
-      - name: Create GitHub Release with APK
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
@@ -88,21 +89,18 @@ jobs:
           body: |
             **JD Admin APK** — automated build from `main` branch.
 
-            > ⚠️ Current `BASE_URL` is set to the **intranet IP** `http://172.29.137.139:8080`.
-            > This APK only works on the office Wi-Fi. Update `src/api/client.js` with your
-            > public tunnel URL (Cloudflare Tunnel / ngrok) for outside-network access.
+            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
+            > Works on office Wi-Fi. For outside access, set up a public tunnel and update `src/api/client.js`.
 
             ### Install
             1. Download `jd-admin-*.apk` below
-            2. Transfer to your Android device (USB / Drive / WhatsApp to self)
-            3. On the device: Settings → Security → **Install unknown apps** → enable for Files
-            4. Open the APK file to install
+            2. Copy to Android device
+            3. Settings → Security → **Install unknown apps** → allow Files app
+            4. Tap the APK to install
 
             ### First launch
-            1. Enter your **Bearer Token** (from `server.js`)
-            2. Set a **4-digit PIN** to lock the app
-            3. Optionally enable biometric unlock
-          prerelease: false
-          files: ${{ env.APK_NAME }}
+            - Enter **Bearer Token** (from `server.js`)
+            - Set a **4-digit PIN**
+          files: jd-admin-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
