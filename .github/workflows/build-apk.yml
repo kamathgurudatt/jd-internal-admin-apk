@@ -69,15 +69,36 @@ jobs:
           PYEOF
 
       # Kotlin 1.9 can't infer generic type U in RNCSafeAreaProviderManagerDelegate(this).
-      # Fix: add explicit <SafeAreaProviderManager> type parameter.
+      # Fix: declare mDelegate with explicit ViewManagerDelegate<SafeAreaProvider> type
+      # to satisfy the override constraint, letting Kotlin infer the delegate's type param.
       - name: Fix safe-area-context SafeAreaProviderManager.kt type inference
         run: |
           FILE="node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaProviderManager.kt"
           if [ -f "$FILE" ]; then
-            sed -i 's/RNCSafeAreaProviderManagerDelegate(this)/RNCSafeAreaProviderManagerDelegate<SafeAreaProviderManager>(this)/g' "$FILE"
-            sed -i 's/override fun getDelegate() = mDelegate$/override fun getDelegate(): RNCSafeAreaProviderManagerDelegate<SafeAreaProviderManager> = mDelegate/g' "$FILE"
-            echo "Patched SafeAreaProviderManager.kt"
-            sed -n '12,18p' "$FILE"
+            python3 << 'PYEOF'
+          import re
+          fname = "node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaProviderManager.kt"
+          with open(fname) as f:
+              content = f.read()
+
+          # Fix: make delegate type explicit so override constraint is satisfied
+          # Change: private val mDelegate = RNCSafeAreaProviderManagerDelegate(this)
+          # To:     private val mDelegate: ViewManagerDelegate<SafeAreaProvider> = RNCSafeAreaProviderManagerDelegate(this)
+          new_content = content.replace(
+              'private val mDelegate = RNCSafeAreaProviderManagerDelegate(this)',
+              'private val mDelegate: com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = RNCSafeAreaProviderManagerDelegate(this)'
+          )
+          # Fix: explicit return type on getDelegate()
+          new_content = new_content.replace(
+              'override fun getDelegate() = mDelegate',
+              'override fun getDelegate(): com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = mDelegate'
+          )
+
+          with open(fname, 'w') as f:
+              f.write(new_content)
+          print("Patched")
+          PYEOF
+            sed -n '12,20p' "$FILE"
           fi
 
       - name: Patch RN plugin settings.gradle.kts — remove foojay
