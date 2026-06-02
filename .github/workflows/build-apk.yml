@@ -30,12 +30,32 @@ jobs:
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Inspect autolinking config
+        run: |
+          echo "=== @react-native-community/cli version ==="
+          cat node_modules/@react-native-community/cli/package.json 2>/dev/null | grep '"version"' | head -1
+          echo ""
+          echo "=== react-native config android section ==="
+          node -e "
+          const {loadConfig} = require('@react-native-community/cli');
+          loadConfig().then(cfg => {
+            const android = cfg.project && cfg.project.android;
+            console.log('packageName:', android && android.packageName);
+            console.log('dependencies count:', Object.keys(cfg.dependencies || {}).length);
+            // Show first 3 native deps
+            const deps = Object.entries(cfg.dependencies || {}).slice(0,3);
+            deps.forEach(([name,info]) => {
+              const a = info.platforms && info.platforms.android;
+              console.log(name, '->', a && a.sourceDir);
+            });
+          }).catch(e => console.log('Error:', e.message));
+          " 2>&1 | head -20
+
       - name: Copy gradle-wrapper.jar
         run: |
           mkdir -p android/gradle/wrapper
           JAR=$(find node_modules -name "gradle-wrapper.jar" 2>/dev/null | head -1)
           cp "$JAR" android/gradle/wrapper/
-          echo "Copied from: $JAR"
 
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
@@ -52,15 +72,6 @@ jobs:
           print("foojay removed:", "foojay" not in patched)
           PYEOF
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper/dists
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
@@ -72,46 +83,10 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Build debug APK
+      - name: Build APK with autolinking --info
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Rename APK with date
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk \
-            jd-admin-v1.0-$(date +%Y%m%d).apk
-
-      - name: Delete existing 'latest' tag & release
-        run: |
-          RELEASE_ID=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
-            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
-          git push origin :refs/tags/latest 2>/dev/null || true
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "JD Admin — Latest Build"
-          body: |
-            **JD Admin APK** — automated build from `main` branch.
-
-            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
-            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
-
-            ### Install
-            1. Download `jd-admin-*.apk` below
-            2. Copy to Android device
-            3. Settings → Security → **Install unknown apps** → allow Files
-            4. Tap the APK to install
-
-            ### First launch
-            - Enter **Bearer Token** (from `server.js`)
-            - Set a **4-digit PIN**
-          files: jd-admin-*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ./gradlew assembleDebug --no-daemon --info 2>&1 | \
+          grep -E "autolink|Autolink|native-screens|native-gesture|screens.*project|gesture.*project|includeBuild.*screen|project.*react-native" | \
+          head -20
+        continue-on-error: true
