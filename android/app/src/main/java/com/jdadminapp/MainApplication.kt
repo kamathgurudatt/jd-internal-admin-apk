@@ -1,7 +1,6 @@
 package com.jdadminapp
 
 import android.app.Application
-import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeHost
@@ -14,11 +13,10 @@ class MainApplication : Application(), ReactApplication {
 
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
-            override fun getPackages(): List<ReactPackage> = PackageList(this).packages
+            // DIAGNOSTIC: empty package list — no native modules at all
+            override fun getPackages(): List<ReactPackage> = emptyList()
             override fun getJSMainModuleName(): String = "index"
-            override fun getUseDeveloperSupport(): Boolean = false  // never try Metro; use bundled JS
-            // Build with new arch (so codegen runs and interfaces compile),
-            // but disable it at runtime to avoid Fabric/JSI native crash on device.
+            override fun getUseDeveloperSupport(): Boolean = false
             override val isNewArchEnabled: Boolean = false
             override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
         }
@@ -29,6 +27,5 @@ class MainApplication : Application(), ReactApplication {
     override fun onCreate() {
         super.onCreate()
         SoLoader.init(this, false)
-        // Do NOT call load() — isNewArchEnabled=false means Paper renderer is used at runtime
     }
 }
