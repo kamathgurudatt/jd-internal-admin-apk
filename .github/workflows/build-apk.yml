@@ -47,13 +47,19 @@ jobs:
             echo "jd_admin_icon.svg not found — using existing mipmap resources"
           fi
 
-      - name: Generate debug keystore
+      - name: Restore signing keystore
         working-directory: android/app
         run: |
-          keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US"
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > debug.keystore
+            echo "Using permanent keystore from secret"
+          else
+            keytool -genkey -v -keystore debug.keystore -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+            echo "WARNING: KEYSTORE_BASE64 secret not set — fresh keystore generated, updates will conflict"
+          fi
 
       - name: Delete React Native source files (no longer needed)
         run: |
