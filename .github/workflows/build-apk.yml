@@ -104,32 +104,6 @@ jobs:
                   print(f"No changes needed: {fname}")
           PYEOF
 
-      # Old arch: SafeAreaProviderManager.kt can't call RNCSafeAreaProviderManagerDelegate(this)
-      # due to Kotlin type inference failing on the two-param Java generic.
-      # Solution: create a Java helper that uses raw types (Java allows this, Kotlin doesn't).
-      - name: Fix safe-area-context old-arch Kotlin type inference via Java helper
-        run: |
-          mkdir -p node_modules/react-native-safe-area-context/android/src/paper/java/com/facebook/react/viewmanagers
-          cat > node_modules/react-native-safe-area-context/android/src/paper/java/com/facebook/react/viewmanagers/RNCSafeAreaHelper.java << 'JAVAEOF'
-          package com.facebook.react.viewmanagers;
-          import com.facebook.react.uimanager.ViewManagerDelegate;
-          import com.th3rdwave.safeareacontext.SafeAreaProvider;
-          public class RNCSafeAreaHelper {
-              @SuppressWarnings({"unchecked","rawtypes"})
-              public static ViewManagerDelegate<SafeAreaProvider> createDelegate(Object manager) {
-                  return new RNCSafeAreaProviderManagerDelegate(manager);
-              }
-          }
-          JAVAEOF
-          echo "Java helper created"
-
-          KT="node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaProviderManager.kt"
-          if [ -f "$KT" ]; then
-            sed -i 's/private val mDelegate = RNCSafeAreaProviderManagerDelegate(this)/private val mDelegate: com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = com.facebook.react.viewmanagers.RNCSafeAreaHelper.createDelegate(this)/g' "$KT"
-            sed -i 's/override fun getDelegate() = mDelegate/override fun getDelegate(): com.facebook.react.uimanager.ViewManagerDelegate<SafeAreaProvider> = mDelegate/g' "$KT"
-            echo "Patched SafeAreaProviderManager.kt"
-          fi
-
       - name: Patch RN plugin settings.gradle.kts — remove foojay
         run: |
           python3 << 'PYEOF'
