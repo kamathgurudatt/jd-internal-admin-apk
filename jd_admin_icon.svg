@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>JD Admin — App Icon</title>
+  <desc>JD Admin Internal Tool app icon — shield design on dark background</desc>
+
+  <!-- App icon background -->
+  <rect width="1024" height="1024" rx="204" fill="#0d0f18"/>
+
+  <!-- Orange shield -->
+  <path d="M512 110 L800 230 L800 500 Q800 710 512 860 Q224 710 224 500 L224 230 Z" fill="#FF6B00"/>
+
+  <!-- JD lettermark -->
+  <text
+    x="512"
+    y="600"
+    text-anchor="middle"
+    font-family="'Arial Black', Impact, 'Helvetica Neue', Arial, sans-serif"
+    font-weight="900"
+    font-size="240"
+    fill="white"
+    letter-spacing="-8"
+  >JD</text>
+</svg>

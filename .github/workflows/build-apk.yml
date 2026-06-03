@@ -39,6 +39,30 @@ jobs:
           JAR=$(find node_modules -name "gradle-wrapper.jar" 2>/dev/null | head -1)
           cp "$JAR" android/gradle/wrapper/
 
+      # Generate PNG app icons from the actual jd_admin_icon.svg provided by the user.
+      # Android vector drawables don't support <text> elements, so we render to PNG.
+      - name: Generate PNG app icons from jd_admin_icon.svg
+        run: |
+          # Install rsvg-convert (renders SVG including text with system fonts)
+          sudo apt-get install -y librsvg2-bin 2>/dev/null || true
+
+          SVG="jd_admin_icon.svg"
+          if [ ! -f "$SVG" ]; then
+            echo "SVG not found — skipping icon generation"
+          else
+            # Generate PNGs for each density
+            declare -A SIZES=( [mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192 )
+            for density in "${!SIZES[@]}"; do
+              size=${SIZES[$density]}
+              outdir="android/app/src/main/res/mipmap-${density}"
+              mkdir -p "$outdir"
+              rsvg-convert -w $size -h $size "$SVG" -o "${outdir}/ic_launcher.png"
+              rsvg-convert -w $size -h $size "$SVG" -o "${outdir}/ic_launcher_round.png"
+              echo "Generated ${density}: ${size}x${size}"
+            done
+            echo "All icon densities generated from jd_admin_icon.svg"
+          fi
+
       # react-native-screens TypeSpec: CT.* namespace types fail in @react-native/codegen parser
       - name: Fix react-native-screens TypeSpec CT.* namespace imports
         run: |
