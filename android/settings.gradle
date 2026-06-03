@@ -9,9 +9,10 @@ pluginManagement {
 plugins {
     id("com.facebook.react.settings")
 }
-// NOTE: autolinkLibrariesFromCommand() removed for diagnostic build
-// It finds native modules in node_modules and generates CMake references
-// that fail because the modules aren't included as subprojects.
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+    ex.autolinkLibrariesFromCommand()
+}
 rootProject.name = 'JDAdminApp'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
+// react-native.config.js disables all native module autolinking for diagnostic build
