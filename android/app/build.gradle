@@ -14,6 +14,9 @@ android {
         targetSdk     rootProject.ext.targetSdkVersion
         versionCode   1
         versionName   "1.0.0"
+        // arm64-v8a covers 99%+ of Android phones since 2015
+        // Removing x86/x86_64 (emulators only) cuts APK from ~135MB to ~45MB
+        ndk { abiFilters "arm64-v8a" }
     }
 
     signingConfigs {
