@@ -426,7 +426,7 @@ class MainActivity : AppCompatActivity() {
                 conn.connect()
                 if (conn.responseCode != 200) return@thread
                 val remote   = conn.inputStream.bufferedReader().readText().trim()
-                val lastSeen = prefs.getString("last_seen_update", "") ?: ""
+                val lastSeen = prefs.getString("last_seen_update_v2", "") ?: ""
                 // Only prompt if this version hasn't been dismissed already
                 if (remote.isNotEmpty() && remote != lastSeen) {
                     runOnUiThread { showUpdateDialog(remote) }
@@ -437,7 +437,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showUpdateDialog(remoteDate: String) {
         // Save immediately so it won't re-prompt even if user ignores
-        prefs.edit().putString("last_seen_update", remoteDate).apply()
+        prefs.edit().putString("last_seen_update_v2", remoteDate).apply()
         AlertDialog.Builder(this)
             .setTitle("Update Available")
             .setMessage("A new build is ready ($remoteDate). Download now?")
