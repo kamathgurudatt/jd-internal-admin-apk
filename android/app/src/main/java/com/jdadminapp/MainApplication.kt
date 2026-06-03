@@ -13,7 +13,6 @@ class MainApplication : Application(), ReactApplication {
 
     override val reactNativeHost: ReactNativeHost =
         object : DefaultReactNativeHost(this) {
-            // DIAGNOSTIC: empty package list — no native modules at all
             override fun getPackages(): List<ReactPackage> = emptyList()
             override fun getJSMainModuleName(): String = "index"
             override fun getUseDeveloperSupport(): Boolean = false
@@ -26,6 +25,12 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         super.onCreate()
-        SoLoader.init(this, false)
+        // Install crash handler FIRST — captures any exception before React starts
+        CrashHandler.install(this)
+        try {
+            SoLoader.init(this, false)
+        } catch (e: Throwable) {
+            // SoLoader failure will be captured by the crash handler
+        }
     }
 }

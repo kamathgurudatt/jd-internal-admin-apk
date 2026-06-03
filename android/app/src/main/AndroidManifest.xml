@@ -3,8 +3,6 @@
     package="com.jdadminapp">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
 
     <application
         android:name=".MainApplication"
@@ -15,6 +13,23 @@
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
 
+        <!--
+            CrashReportActivity is the LAUNCHER.
+            It checks for a previous crash and shows it on screen.
+            If no crash: it immediately starts MainActivity.
+            This means even if React Native crashes, the crash is captured
+            and shown on the NEXT launch so you can screenshot it.
+        -->
+        <activity
+            android:name=".CrashReportActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name"
@@ -22,10 +37,6 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity>
     </application>
 </manifest>
