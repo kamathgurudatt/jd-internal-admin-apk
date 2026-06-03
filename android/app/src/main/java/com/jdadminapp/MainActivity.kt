@@ -37,8 +37,7 @@ class MainActivity : AppCompatActivity() {
             }
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String) {
-                    if (token.isEmpty()) return
-                    // Inject Bearer token into every fetch() and XHR call on the page
+                    // Inject Bearer token + ngrok bypass into every fetch() and XHR call
                     val t = token.replace("\\", "\\\\").replace("'", "\\'")
                     view.evaluateJavascript("""
                         (function(){
@@ -47,12 +46,14 @@ class MainActivity : AppCompatActivity() {
                           var oF=window.fetch.bind(window);
                           window.fetch=function(u,o){
                             o=o||{};var h=new Headers(o.headers||{});
-                            if(!h.has('Authorization'))h.set('Authorization','Bearer '+T);
+                            if(T&&!h.has('Authorization'))h.set('Authorization','Bearer '+T);
+                            h.set('ngrok-skip-browser-warning','1');
                             o.headers=h;return oF(u,o);
                           };
                           var oS=XMLHttpRequest.prototype.send;
                           XMLHttpRequest.prototype.send=function(b){
-                            try{this.setRequestHeader('Authorization','Bearer '+T);}catch(e){}
+                            try{if(T)this.setRequestHeader('Authorization','Bearer '+T);}catch(e){}
+                            try{this.setRequestHeader('ngrok-skip-browser-warning','1');}catch(e){}
                             oS.apply(this,arguments);
                           };
                         })();
@@ -68,12 +69,10 @@ class MainActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT))
         })
 
-        // First page load carries the Authorization header; JS injection handles subsequent pages
-        if (token.isNotEmpty()) {
-            webView.loadUrl(serverUrl, mapOf("Authorization" to "Bearer $token"))
-        } else {
-            webView.loadUrl(serverUrl)
-        }
+        // First page load — send both auth + ngrok bypass headers
+        val initHeaders = mutableMapOf("ngrok-skip-browser-warning" to "1")
+        if (token.isNotEmpty()) initHeaders["Authorization"] = "Bearer $token"
+        webView.loadUrl(serverUrl, initHeaders)
     }
 
     @Suppress("OVERRIDE_DEPRECATION", "MissingSuperCall")
