@@ -61,6 +61,13 @@ jobs:
             echo "WARNING: KEYSTORE_BASE64 secret not set — fresh keystore generated, updates will conflict"
           fi
 
+      - name: Stamp build date into strings.xml
+        run: |
+          BUILD_DATE=$(date -u +%Y%m%d-%H%M)
+          sed -i "s|<string name=\"build_date\">.*</string>|<string name=\"build_date\">${BUILD_DATE}</string>|" \
+            android/app/src/main/res/values/strings.xml
+          echo "Build date stamped: $BUILD_DATE"
+
       - name: Delete React Native source files (no longer needed)
         run: |
           rm -f android/app/src/main/java/com/jdadminapp/MainApplication.kt

@@ -28,9 +28,9 @@ class MainActivity : AppCompatActivity() {
     private var currentTab = 0
 
     // Tab 0 = native home, 1-3 = WebViews, 4 = native settings
-    private val tabEmojis  = listOf("🏠", "📊", "🔐", "📈", "⚙")
-    private val tabLabels  = listOf("Home", "QC", "Access", "Analytics", "Settings")
-    private val webPaths   = mapOf(1 to "/mobile-qc.html",
+    private val tabEmojis  = listOf("🏠", "⏱", "🔐", "📈", "⚙")
+    private val tabLabels  = listOf("Home", "Cron", "Access", "Analytics", "Settings")
+    private val webPaths   = mapOf(1 to "/mobile-cron.html",
                                    2 to "/mobile-access.html",
                                    3 to "/mobile-analytics.html")
 
@@ -437,10 +437,12 @@ class MainActivity : AppCompatActivity() {
                 conn.setRequestProperty("ngrok-skip-browser-warning", "1")
                 conn.connect()
                 if (conn.responseCode != 200) return@thread
-                val remote   = conn.inputStream.bufferedReader().readText().trim()
-                val lastSeen = prefs.getString("last_seen_update_v2", "") ?: ""
-                // Only prompt if this version hasn't been dismissed already
-                if (remote.isNotEmpty() && remote != lastSeen) {
+                val remote    = conn.inputStream.bufferedReader().readText().trim()
+                val installed = getString(R.string.build_date)  // stamped by CI at build time
+                val dismissed = prefs.getString("last_seen_update_v2", "") ?: ""
+                // Show only if server has a newer build than what's installed,
+                // and user hasn't already dismissed this specific version
+                if (remote.isNotEmpty() && remote != installed && remote != dismissed) {
                     runOnUiThread { showUpdateDialog(remote) }
                 }
             } catch (_: Exception) {}
