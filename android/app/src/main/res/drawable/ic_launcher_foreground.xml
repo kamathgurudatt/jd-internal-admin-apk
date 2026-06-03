@@ -1,35 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    JD Admin launcher icon — white JD letters on transparent background
-    (background color #FF6B00 is set in ic_launcher_background.xml)
--->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- J -->
+    <!-- J letter: top bar + vertical stem + bottom hook -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="
-          M22,22 L36,22 L36,70
-          Q36,86 50,86
-          Q60,86 64,78
-          L52,72
-          Q52,76 50,76
-          Q48,76 48,70
-          L48,22 Z"/>
+        android:pathData="M16,22 L44,22 L44,30 L30,30 L30,72
+                         Q30,86 16,87
+                         L14,79 Q22,78 22,72 L22,30 L16,30 Z"/>
 
-    <!-- D -->
+    <!-- D letter: vertical back + rounded right side (evenOdd for hole) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="
-          M60,22 L60,86 L74,86
-          Q92,86 92,54
-          Q92,22 74,22 Z
-          M72,34
-          Q80,34 80,54
-          Q80,74 72,74
-          L72,34 Z"/>
+        android:fillType="evenOdd"
+        android:pathData="M52,22 L68,22
+                         Q90,22 90,55
+                         Q90,88 68,88
+                         L52,88 Z
+                         M61,34 Q79,34 79,55 Q79,76 61,76 Z"/>
 </vector>
