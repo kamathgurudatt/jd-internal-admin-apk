@@ -1,101 +1,129 @@
 package com.jdadminapp
 
 import android.app.Activity
+import android.app.ActivityManager
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
 import android.widget.*
 
-/**
- * Pure Android Activity — no React Native.
- * Shows on launch if a previous crash was recorded.
- * Screenshot this and share with the developer.
- */
 class CrashReportActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val crash = CrashHandler.getLastCrash(this) ?: run {
-            // No crash — go straight to main app
-            startMainActivity()
-            return
+        // Try Java crash log first
+        var crashLog = CrashHandler.getLastCrash(this)
+
+        // On Android 11+ (API 30), also check native crash / ANR reason
+        if (Build.VERSION.SDK_INT >= 30 && crashLog == null) {
+            try {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                val reasons = am.getHistoricalProcessExitReasons(packageName, 0, 5)
+                if (reasons.isNotEmpty()) {
+                    val last = reasons[0]
+                    crashLog = buildString {
+                        append("=== NATIVE CRASH DETECTED ===\n\n")
+                        append("Android exit reason: ${last.reason}\n")
+                        append("Description: ${last.description ?: "none"}\n")
+                        append("Exit status: ${last.status}\n\n")
+                        append("Reason codes:\n")
+                        append("  1=CRASH  2=ANR  3=KILL  4=OTHER  6=SIGNALED  9=DEPENDENCY_DIED\n\n")
+                        append("Device: ${Build.MANUFACTURER} ${Build.MODEL}\n")
+                        append("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n")
+                        append("ABI: ${Build.SUPPORTED_ABIS.joinToString()}\n")
+                    }
+                }
+            } catch (e: Throwable) {
+                crashLog = "Could not read exit reasons: ${e.message}\n\n" +
+                    "Device: ${Build.MANUFACTURER} ${Build.MODEL}\n" +
+                    "Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+                    "ABI: ${Build.SUPPORTED_ABIS.joinToString()}"
+            }
         }
 
-        // Build the crash report UI entirely in Kotlin (no XML needed)
+        // Always show device info even if no crash log
+        if (crashLog == null) {
+            crashLog = buildString {
+                append("No crash log captured yet.\n\n")
+                append("Device: ${Build.MANUFACTURER} ${Build.MODEL}\n")
+                append("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n")
+                append("ABI: ${Build.SUPPORTED_ABIS.joinToString()}\n\n")
+                append("The crash may be a native signal (SIGSEGV/SIGABRT)\n")
+                append("that happens before Java code runs.\n")
+                append("Share this screen with the developer.")
+            }
+        } else {
+            // Append device info to any crash log
+            crashLog += "\n\n=== DEVICE INFO ===\n" +
+                "Device: ${Build.MANUFACTURER} ${Build.MODEL}\n" +
+                "Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+                "ABI: ${Build.SUPPORTED_ABIS.joinToString()}"
+        }
+
+        buildUI(crashLog)
+    }
+
+    private fun buildUI(crashLog: String) {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#05060a"))
             setPadding(0, 60, 0, 20)
         }
 
-        // Header
         root.addView(TextView(this).apply {
-            text = "⚠ JD Admin — Crash Report"
+            text = "⚠ JD Admin — Crash Info"
             textSize = 18f
             setTextColor(Color.parseColor("#ef4444"))
             typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
+            gravity = android.view.Gravity.CENTER
             setPadding(24, 0, 24, 4)
         })
 
         root.addView(TextView(this).apply {
-            text = "Screenshot this and share with developer"
+            text = "Screenshot this entire screen and share with developer"
             textSize = 12f
-            setTextColor(Color.parseColor("#8892a8"))
-            gravity = Gravity.CENTER
-            setPadding(24, 0, 24, 20)
+            setTextColor(Color.parseColor("#f59e0b"))
+            gravity = android.view.Gravity.CENTER
+            setPadding(24, 0, 24, 16)
         })
 
-        // Crash text in scrollable container
         val scroll = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-            )
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
             setBackgroundColor(Color.parseColor("#0d0f18"))
         }
-
         scroll.addView(TextView(this).apply {
-            text = crash
+            text = crashLog
             textSize = 10f
             setTextColor(Color.parseColor("#eef0f8"))
             typeface = Typeface.MONOSPACE
             setTextIsSelectable(true)
-            setPadding(24, 24, 24, 24)
+            setPadding(20, 20, 20, 20)
         })
         root.addView(scroll)
 
-        // Buttons row
         val btnRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(24, 16, 24, 0)
+            gravity = android.view.Gravity.CENTER
+            setPadding(24, 12, 24, 0)
         }
-
-        // Clear & retry button
         btnRow.addView(Button(this).apply {
             text = "Clear & Try Again"
             setBackgroundColor(Color.parseColor("#FF6B00"))
             setTextColor(Color.WHITE)
-            layoutParams = LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also { it.marginEnd = 8 }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT)
             setOnClickListener {
                 CrashHandler.clearLastCrash(this@CrashReportActivity)
-                startMainActivity()
+                startActivity(android.content.Intent(this@CrashReportActivity, MainActivity::class.java))
+                finish()
             }
         })
-
         root.addView(btnRow)
         setContentView(root)
-    }
-
-    private fun startMainActivity() {
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
-            ?.apply { addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP) }
-        // Since THIS is the launcher, just start MainActivity directly
-        startActivity(android.content.Intent(this, MainActivity::class.java))
-        finish()
     }
 }
