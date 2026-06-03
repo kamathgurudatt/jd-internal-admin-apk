@@ -187,12 +187,11 @@ jobs:
           body: |
             **JD Admin APK** — automated build from `main` branch.
 
-            > ⚠️ `BASE_URL` = `http://172.29.137.139:8080` (intranet only).
-            > Works on office Wi-Fi. For outside-network access, update `src/api/client.js`.
+            > Always download the latest `.apk` file listed in **Assets** below (filename includes today's date).
 
             ### Install
-            1. Download `jd-admin-*.apk` below
-            2. Copy to Android device
+            1. **Uninstall** any previous JD Admin version first
+            2. Download `jd-admin-*.apk` from Assets below
             3. Settings → Security → **Install unknown apps** → allow Files
             4. Tap the APK to install
 
