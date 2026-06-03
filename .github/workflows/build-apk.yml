@@ -70,36 +70,42 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk \
             jd-admin-v2.0-$(date +%Y%m%d).apk
 
-      - name: Delete existing 'latest' tag & release
-        run: |
-          RELEASE_ID=$(curl -s \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/latest" \
-            | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-          [ -n "$RELEASE_ID" ] && curl -s -X DELETE \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID" || true
-          git push origin :refs/tags/latest 2>/dev/null || true
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "JD Admin v2.0 — Latest Build"
-          draft: false
-          prerelease: false
-          body: |
-            **JD Admin v2.0** — WebView build (no React Native, no native library issues).
-
-            Works on Android 15, 16 and all modern devices.
-
-            > Download the `.apk` file from **Assets** below.
-            > Uninstall any previous version first.
-
-            ### First launch setup
-            1. Enter server URL (default: `http://172.29.137.139:8080`)
-            2. Enter bearer token
-            3. Set a 4-digit PIN
-          files: jd-admin-v2.0-*.apk
+      - name: Publish GitHub Release (direct API)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          APK=$(ls jd-admin-v2.0-*.apk | head -1)
+          echo "APK file: $APK ($(du -sh $APK | cut -f1))"
+
+          # Delete old release + tag
+          OLD_ID=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/releases/tags/latest" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || true)
+          [ -n "$OLD_ID" ] && curl -s -X DELETE \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/releases/$OLD_ID" || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+          sleep 2
+
+          # Create release
+          BODY=$(printf '%s' '{"tag_name":"latest","target_commitish":"main","name":"JD Admin v2.0 — Latest Build","draft":false,"prerelease":false,"body":"**JD Admin v2.0** — WebView build, works on Android 15 & 16.\n\nDownload the .apk from **Assets** below. Uninstall old version first.\n\n### First launch\n1. Enter server URL\n2. Enter bearer token\n3. Set 4-digit PIN"}')
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$REPO/releases" \
+            -d "$BODY")
+          echo "Create response: $RESPONSE" | head -c 500
+
+          UPLOAD_URL=$(echo "$RESPONSE" | python3 -c \
+            "import sys,json; d=json.load(sys.stdin); print(d['upload_url'].replace('{?name,label}',''))")
+          echo "Upload URL: $UPLOAD_URL"
+
+          # Upload APK
+          UPLOAD_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            "${UPLOAD_URL}?name=${APK}&label=${APK}" \
+            --data-binary @"$APK")
+          echo "Upload response: $(echo $UPLOAD_RESP | head -c 300)"
+          echo "Done: $(echo $UPLOAD_RESP | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"browser_download_url\",\"no URL\"))')"
