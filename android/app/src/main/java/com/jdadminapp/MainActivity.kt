@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.webkit.*
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,19 +27,62 @@ class MainActivity : AppCompatActivity() {
         webView = WebView(this).apply {
             setBackgroundColor(Color.parseColor("#05060a"))
             settings.apply {
-                javaScriptEnabled   = true
-                domStorageEnabled   = true
+                javaScriptEnabled    = true
+                domStorageEnabled    = true
                 loadWithOverviewMode = true
-                useWideViewPort     = true
-                builtInZoomControls = false
-                displayZoomControls = false
+                useWideViewPort      = true
+                builtInZoomControls  = false
+                displayZoomControls  = false
                 @Suppress("DEPRECATION")
                 savePassword = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             }
             webViewClient = object : WebViewClient() {
+
+                // Intercept every GET request — adds Bearer token + ngrok bypass to all navigations
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): WebResourceResponse? {
+                    if (request.method.uppercase() != "GET") return null
+                    return try {
+                        val conn = URL(request.url.toString()).openConnection() as HttpURLConnection
+                        conn.requestMethod = "GET"
+                        conn.connectTimeout = 15_000
+                        conn.readTimeout    = 30_000
+                        conn.instanceFollowRedirects = true
+                        // Copy original headers (skip Authorization so we control it)
+                        request.requestHeaders.forEach { (k, v) ->
+                            if (!k.equals("Authorization", ignoreCase = true)) {
+                                conn.setRequestProperty(k, v)
+                            }
+                        }
+                        if (token.isNotEmpty()) conn.setRequestProperty("Authorization", "Bearer $token")
+                        conn.setRequestProperty("ngrok-skip-browser-warning", "1")
+                        conn.connect()
+
+                        val mime = conn.contentType
+                            ?.split(";")?.firstOrNull()?.trim() ?: "text/html"
+                        val charset = conn.contentType
+                            ?.split(";")
+                            ?.find { it.trim().startsWith("charset=", ignoreCase = true) }
+                            ?.substringAfter("=")?.trim() ?: "utf-8"
+                        val code = conn.responseCode
+                        val stream = if (code < 400) conn.inputStream else conn.errorStream
+
+                        WebResourceResponse(mime, charset, code,
+                            if (code == 200) "OK" else "Error",
+                            conn.headerFields
+                                .filterKeys { it != null }
+                                .mapValues { it.value.firstOrNull() ?: "" },
+                            stream)
+                    } catch (e: Exception) {
+                        null // fall through to normal WebView handling
+                    }
+                }
+
+                // JS injection for fetch/XHR API calls made inside the page
                 override fun onPageFinished(view: WebView, url: String) {
-                    // Inject Bearer token + ngrok bypass into every fetch() and XHR call
                     val t = token.replace("\\", "\\\\").replace("'", "\\'")
                     view.evaluateJavascript("""
                         (function(){
@@ -69,7 +114,7 @@ class MainActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT))
         })
 
-        // First page load — send both auth + ngrok bypass headers
+        // Initial load — shouldInterceptRequest does NOT fire for this call, so send headers here too
         val initHeaders = mutableMapOf("ngrok-skip-browser-warning" to "1")
         if (token.isNotEmpty()) initHeaders["Authorization"] = "Bearer $token"
         webView.loadUrl(serverUrl, initHeaders)
