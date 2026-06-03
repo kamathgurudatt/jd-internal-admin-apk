@@ -158,6 +158,8 @@ jobs:
         with:
           tag_name: latest
           name: "JD Admin — Latest Build"
+          draft: false
+          prerelease: false
           body: |
             **JD Admin APK** — automated build from `main` branch.
 
