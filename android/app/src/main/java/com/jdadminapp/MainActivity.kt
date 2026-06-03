@@ -30,9 +30,9 @@ class MainActivity : AppCompatActivity() {
     // Tab 0 = native home, 1-3 = WebViews, 4 = native settings
     private val tabEmojis  = listOf("🏠", "📊", "🔐", "📈", "⚙")
     private val tabLabels  = listOf("Home", "QC", "Access", "Analytics", "Settings")
-    private val webPaths   = mapOf(1 to "/ai_qc_dashboard.html",
-                                   2 to "/admin-access.html",
-                                   3 to "/analytics-dashboard.html")
+    private val webPaths   = mapOf(1 to "/mobile-qc.html",
+                                   2 to "/mobile-access.html",
+                                   3 to "/mobile-analytics.html")
 
     private val webViews   = arrayOfNulls<WebView>(5)
     private val tabViews   = arrayOfNulls<View>(5)
@@ -292,10 +292,10 @@ class MainActivity : AppCompatActivity() {
         settings.apply {
             javaScriptEnabled    = true
             domStorageEnabled    = true
-            useWideViewPort      = false  // respect page's width=device-width viewport
-            loadWithOverviewMode = false  // don't zoom out to fit desktop width
-            builtInZoomControls  = true   // allow pinch-to-zoom as fallback
-            displayZoomControls  = false  // hide on-screen +/- buttons
+            useWideViewPort      = false
+            loadWithOverviewMode = false
+            builtInZoomControls  = true
+            displayZoomControls  = false
             mixedContentMode     = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             @Suppress("DEPRECATION") savePassword = false
         }
