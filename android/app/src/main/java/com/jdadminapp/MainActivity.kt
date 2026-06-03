@@ -112,6 +112,11 @@ class MainActivity : AppCompatActivity() {
         })
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         wrapper.addView(row)
+        // Spacer that fills the Android navigation bar height so tabs aren't hidden behind it
+        wrapper.addView(View(this).apply {
+            setBackgroundColor(SURFACE)
+            layoutParams = LinearLayout.LayoutParams(MP, navBarHeight())
+        })
 
         tabEmojis.forEachIndexed { i, emoji ->
             val ind = View(this@MainActivity).apply {
@@ -499,6 +504,7 @@ class MainActivity : AppCompatActivity() {
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     private fun sha256(s: String) = MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
     private fun statusBarPad(): Int { val id = resources.getIdentifier("status_bar_height", "dimen", "android"); return if (id > 0) resources.getDimensionPixelSize(id) else 0 }
+    private fun navBarHeight(): Int { val id = resources.getIdentifier("navigation_bar_height", "dimen", "android"); return if (id > 0) resources.getDimensionPixelSize(id) else 0 }
 
     private val BG     = Color.parseColor("#05060a")
     private val SURFACE = Color.parseColor("#0d0f18")

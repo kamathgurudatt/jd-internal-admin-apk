@@ -26,6 +26,7 @@ class PinActivity : AppCompatActivity() {
     private lateinit var dots: Array<View>
     private var urlEdit: EditText? = null
     private var tokenEdit: EditText? = null
+    private var setupFieldsContainer: LinearLayout? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,8 +36,14 @@ class PinActivity : AppCompatActivity() {
     }
 
     private fun buildUI() {
+        val navBarH = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+            .let { if (it > 0) resources.getDimensionPixelSize(it) else 0 }
+        val statusBarH = resources.getIdentifier("status_bar_height", "dimen", "android")
+            .let { if (it > 0) resources.getDimensionPixelSize(it) else 0 }
         val scroll = ScrollView(this).apply { setBackgroundColor(bg) }
-        val root = col(Gravity.CENTER_HORIZONTAL).apply { setPadding(0, 64.dp, 0, 32.dp) }
+        val root = col(Gravity.CENTER_HORIZONTAL).apply {
+            setPadding(0, statusBarH + 24.dp, 0, navBarH + 24.dp)
+        }
         scroll.addView(root)
         setContentView(scroll)
 
@@ -62,10 +69,11 @@ class PinActivity : AppCompatActivity() {
         root.addView(statusText)
         root.addView(gap(20))
 
-        if (mode == "setup") {
-            root.addView(setupFields())
-            root.addView(gap(20))
-        }
+        // Always create setup fields container; visibility toggled by mode
+        val fields = setupFields()
+        setupFieldsContainer = fields
+        root.addView(fields)
+        root.addView(gap(20))
 
         // PIN dots row
         val dotRow = LinearLayout(this).apply { gravity = Gravity.CENTER }
@@ -221,10 +229,13 @@ class PinActivity : AppCompatActivity() {
 
     private fun updateStatus() {
         statusText.text = when (mode) {
-            "setup" -> "First launch — configure access"
+            "setup"   -> "First launch — configure access"
             "confirm" -> "Confirm your PIN"
-            else -> "Enter your PIN"
+            else      -> "Enter your PIN"
         }
+        // Only show URL/token fields during initial setup, not during PIN confirm or verify
+        setupFieldsContainer?.visibility =
+            if (mode == "setup") View.VISIBLE else View.GONE
         refresh()
     }
 
