@@ -1,24 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Converted from jd_admin_icon.svg
+    Original: orange shield on dark background with white JD lettermark
+    Foreground layer: orange shield + white JD paths (background is dark #0d0f18)
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- J letter: top bar + vertical stem + bottom hook -->
+    <!-- Orange shield (scaled from SVG viewBox 1024→108, scale=0.1055) -->
+    <!-- Original: M512 110 L800 230 L800 500 Q800 710 512 860 Q224 710 224 500 L224 230 Z -->
+    <path
+        android:fillColor="#FF6B00"
+        android:pathData="M54,12 L84,24 L84,53 Q84,75 54,91 Q24,75 24,53 L24,24 Z"/>
+
+    <!-- White J letter (bold, left side of shield) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M16,22 L44,22 L44,30 L30,30 L30,72
-                         Q30,86 16,87
-                         L14,79 Q22,78 22,72 L22,30 L16,30 Z"/>
+        android:pathData="M28,33 H44 V41 H38 V65
+                         Q38,76 28,76
+                         Q20,76 18,69
+                         L26,65
+                         Q27,69 28,69
+                         Q30,69 30,65
+                         V41 H28 Z"/>
 
-    <!-- D letter: vertical back + rounded right side (evenOdd for hole) -->
+    <!-- White D letter (bold, right side of shield, with hole) -->
     <path
         android:fillColor="#FFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M52,22 L68,22
-                         Q90,22 90,55
-                         Q90,88 68,88
-                         L52,88 Z
-                         M61,34 Q79,34 79,55 Q79,76 61,76 Z"/>
+        android:pathData="M50,33 H62
+                         Q78,33 78,55
+                         Q78,77 62,77
+                         H50 Z
+                         M58,42 Q70,42 70,55 Q70,68 58,68 Z"/>
+
 </vector>
