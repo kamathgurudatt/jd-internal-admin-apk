@@ -1,20 +1,18 @@
-apply plugin: "com.android.application"
-apply plugin: "com.facebook.react"
-apply plugin: "org.jetbrains.kotlin.android"
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
 
 android {
-    ndkVersion        rootProject.ext.ndkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk        rootProject.ext.compileSdkVersion
-    namespace         "com.jdadminapp"
+    namespace 'com.jdadminapp'
+    compileSdk 35
 
     defaultConfig {
-        applicationId "com.jdadminapp"
-        minSdk        rootProject.ext.minSdkVersion
-        targetSdk     rootProject.ext.targetSdkVersion
-        versionCode   1
-        versionName   "1.0.0"
-        // abiFilters removed — build for all ABIs to prevent silent ABI mismatch crashes
+        applicationId 'com.jdadminapp'
+        minSdk 26
+        targetSdk 35
+        versionCode 2
+        versionName "2.0.0"
     }
 
     signingConfigs {
@@ -27,19 +25,21 @@ android {
     }
 
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
+        debug   { signingConfig signingConfigs.debug }
         release {
-            signingConfig    signingConfigs.debug
-            minifyEnabled    false
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            signingConfig signingConfigs.debug
+            minifyEnabled false
         }
     }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
 }
 
 dependencies {
-    // Core React Native only — DIAGNOSTIC BUILD (all native modules removed)
-    implementation("com.facebook.react:react-android:0.79.7")
-    implementation("com.facebook.react:hermes-android:0.79.7")
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.security:security-crypto:1.0.0'
 }

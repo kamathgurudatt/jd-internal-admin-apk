@@ -8,7 +8,6 @@ permissions:
   contents: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ANDROID_HOME: /usr/local/lib/android/sdk
 
 jobs:
@@ -25,129 +24,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
+      - name: Set up Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
         with:
-          node-version: '20'
+          gradle-version: '8.10.2'
 
-      - name: Install npm dependencies
-        run: npm install --legacy-peer-deps --fetch-retries 5 --fetch-retry-mintimeout 10000 --fetch-retry-maxtimeout 60000
-
-      - name: Copy gradle-wrapper.jar
-        run: |
-          mkdir -p android/gradle/wrapper
-          JAR=$(find node_modules -name "gradle-wrapper.jar" 2>/dev/null | head -1)
-          cp "$JAR" android/gradle/wrapper/
-
-      # Generate PNG app icons from the actual jd_admin_icon.svg provided by the user.
-      # Android vector drawables don't support <text> elements, so we render to PNG.
       - name: Generate PNG app icons from jd_admin_icon.svg
         run: |
-          # Install rsvg-convert (renders SVG including text with system fonts)
           sudo apt-get install -y librsvg2-bin 2>/dev/null || true
-
           SVG="jd_admin_icon.svg"
-          if [ ! -f "$SVG" ]; then
-            echo "SVG not found — skipping icon generation"
-          else
-            # Generate PNGs for each density
-            declare -A SIZES=( [mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192 )
-            for density in "${!SIZES[@]}"; do
-              size=${SIZES[$density]}
+          if [ -f "$SVG" ]; then
+            for entry in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
+              density="${entry%%:*}"
+              size="${entry##*:}"
               outdir="android/app/src/main/res/mipmap-${density}"
               mkdir -p "$outdir"
-              rsvg-convert -w $size -h $size "$SVG" -o "${outdir}/ic_launcher.png"
-              rsvg-convert -w $size -h $size "$SVG" -o "${outdir}/ic_launcher_round.png"
+              rsvg-convert -w "$size" -h "$size" "$SVG" -o "${outdir}/ic_launcher.png"
+              rsvg-convert -w "$size" -h "$size" "$SVG" -o "${outdir}/ic_launcher_round.png"
               echo "Generated ${density}: ${size}x${size}"
             done
-            echo "All icon densities generated from jd_admin_icon.svg"
+          else
+            echo "jd_admin_icon.svg not found — using existing mipmap resources"
           fi
-
-      # react-native-screens TypeSpec: CT.* namespace types fail in @react-native/codegen parser
-      - name: Fix react-native-screens TypeSpec CT.* namespace imports
-        run: |
-          python3 << 'PYEOF'
-          import os, re
-          ROOT = "node_modules/react-native-screens"
-          CODEGEN_TYPES_IMPORT = "import type {WithDefault, Float, Int32, Double, BubblingEventHandler, DirectEventHandler, UnsafeMixed} from 'react-native/Libraries/Types/CodegenTypes';"
-          fixed = 0
-          for rdir, dirs, files in os.walk(ROOT):
-              dirs[:] = [d for d in dirs if d not in ('node_modules', '__tests__', '.git')]
-              for fname in files:
-                  if not (fname.endswith('.ts') or fname.endswith('.tsx')):
-                      continue
-                  path = os.path.join(rdir, fname)
-                  try:
-                      with open(path, 'r', errors='replace') as f:
-                          content = f.read()
-                  except Exception:
-                      continue
-                  if 'import * as CT' not in content and 'CT.' not in content:
-                      continue
-                  new_content = re.sub(r"import \* as CT from '[^']*CodegenTypes[^']*';?", CODEGEN_TYPES_IMPORT, content)
-                  new_content = re.sub(r'\bCT\.', '', new_content)
-                  if new_content != content:
-                      with open(path, 'w') as f:
-                          f.write(new_content)
-                      fixed += 1
-          print(f"Total: {fixed} TypeSpec files fixed")
-          PYEOF
-
-      # react-native-safe-area-context C++ uses yoga::Style::Length::unit() which was
-      # removed in the Yoga version bundled with react-android:0.79.7.
-      # Replace with isDefined() which checks if the length has a defined (non-undefined) value.
-      - name: Fix safe-area-context C++ StyleLength.unit() → isDefined()
-        run: |
-          python3 << 'PYEOF'
-          import os, re
-
-          CPP_FILES = [
-              "node_modules/react-native-safe-area-context/common/cpp/react/renderer/components/safeareacontext/RNCSafeAreaViewShadowNode.cpp",
-          ]
-          for fname in CPP_FILES:
-              if not os.path.exists(fname):
-                  print(f"Not found: {fname}")
-                  continue
-              with open(fname) as f:
-                  content = f.read()
-              # Replace .unit() != Unit::Undefined with .isDefined()
-              new_content = content.replace(
-                  '.unit() != Unit::Undefined',
-                  '.isDefined()'
-              )
-              # Also handle == Unit::Undefined (negate it)
-              new_content = new_content.replace(
-                  '.unit() == Unit::Undefined',
-                  '.isUndefined()'
-              )
-              if new_content != content:
-                  with open(fname, 'w') as f:
-                      f.write(new_content)
-                  print(f"Fixed C++: {fname}")
-              else:
-                  print(f"No changes needed: {fname}")
-          PYEOF
-
-      - name: Patch RN plugin settings.gradle.kts — remove foojay
-        run: |
-          python3 << 'PYEOF'
-          import re
-          fname = "node_modules/@react-native/gradle-plugin/settings.gradle.kts"
-          with open(fname) as f:
-              content = f.read()
-          patched = re.sub(r'\nplugins \{ id\("org\.gradle\.toolchains\.foojay-resolver-convention"\)[^\}]*\}\n', '\n', content)
-          with open(fname, 'w') as f:
-              f.write(patched)
-          print("foojay removed:", "foojay" not in patched)
-          PYEOF
-
-      - name: Setup Android NDK
-        run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            --install "ndk;26.1.10909125" 2>/dev/null || true
-
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
 
       - name: Generate debug keystore
         working-directory: android/app
@@ -157,14 +55,20 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Delete React Native source files (no longer needed)
+        run: |
+          rm -f android/app/src/main/java/com/jdadminapp/MainApplication.kt
+          rm -f android/app/src/main/java/com/jdadminapp/CrashHandler.kt
+          rm -f android/app/src/main/java/com/jdadminapp/CrashReportActivity.kt
+
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK with date
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk \
-            jd-admin-v1.0-$(date +%Y%m%d).apk
+            jd-admin-v2.0-$(date +%Y%m%d).apk
 
       - name: Delete existing 'latest' tag & release
         run: |
@@ -181,23 +85,21 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "JD Admin — Latest Build"
+          name: "JD Admin v2.0 — Latest Build"
           draft: false
           prerelease: false
           body: |
-            **JD Admin APK** — automated build from `main` branch.
+            **JD Admin v2.0** — WebView build (no React Native, no native library issues).
 
-            > Always download the latest `.apk` file listed in **Assets** below (filename includes today's date).
+            Works on Android 15, 16 and all modern devices.
 
-            ### Install
-            1. **Uninstall** any previous JD Admin version first
-            2. Download `jd-admin-*.apk` from Assets below
-            3. Settings → Security → **Install unknown apps** → allow Files
-            4. Tap the APK to install
+            > Download the `.apk` file from **Assets** below.
+            > Uninstall any previous version first.
 
-            ### First launch
-            - Enter **Bearer Token** (from `server.js`)
-            - Set a **4-digit PIN**
-          files: jd-admin-*.apk
+            ### First launch setup
+            1. Enter server URL (default: `http://172.29.137.139:8080`)
+            2. Enter bearer token
+            3. Set a 4-digit PIN
+          files: jd-admin-v2.0-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
