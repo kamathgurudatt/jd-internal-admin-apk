@@ -6,6 +6,7 @@ import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -17,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
@@ -64,6 +66,45 @@ class MainActivity : AppCompatActivity() {
         root.addView(bottomNav())
 
         switchTab(0)
+        checkForUpdate()
+    }
+
+    // ── Update checker ────────────────────────────────────────────────────────
+    // Checks the /apk endpoint on the server for a newer build date than installed.
+
+    private fun checkForUpdate() {
+        val installedDate = packageManager
+            .getPackageInfo(packageName, 0).versionName   // e.g. "2.0.0"
+            .let { prefs.getString("apk_build_date", "") } // date of installed APK
+
+        thread(isDaemon = true) {
+            try {
+                val conn = URL("$serverUrl/apk-version").openConnection() as HttpURLConnection
+                conn.connectTimeout = 6_000; conn.readTimeout = 6_000
+                if (token.isNotEmpty()) conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("ngrok-skip-browser-warning", "1")
+                conn.connect()
+                if (conn.responseCode != 200) return@thread
+                val remoteDate = conn.inputStream.bufferedReader().readText().trim()
+                val localDate  = prefs.getString("apk_build_date", "") ?: ""
+                if (remoteDate.isNotEmpty() && remoteDate != localDate) {
+                    runOnUiThread { showUpdateDialog(remoteDate) }
+                }
+            } catch (_: Exception) { /* silent — no network or server down */ }
+        }
+    }
+
+    private fun showUpdateDialog(remoteDate: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Update Available")
+            .setMessage("A new build ($remoteDate) is ready. Download and install now?")
+            .setPositiveButton("Download") { _, _ ->
+                // Open the /apk URL — triggers download in browser
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    Uri.parse("$serverUrl/apk")))
+            }
+            .setNegativeButton("Later", null)
+            .show()
     }
 
     @Suppress("OVERRIDE_DEPRECATION", "MissingSuperCall")
