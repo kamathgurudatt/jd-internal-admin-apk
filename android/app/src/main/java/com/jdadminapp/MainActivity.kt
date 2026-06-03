@@ -184,7 +184,7 @@ class MainActivity : AppCompatActivity() {
             addView(vGap(6))
             addView(LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                addView(badge("⚙  Admin", ORANGE, "#3a1800"))
+                addView(badge("⚙  Admin", ORANGE, Color.parseColor("#3a1800")))
                 addView(vGap(0).apply { layoutParams = LinearLayout.LayoutParams(8.dp, 1) })
                 addView(badge("Emp 10101221", Color.parseColor("#8a91a8"), SURFACE))
             })
