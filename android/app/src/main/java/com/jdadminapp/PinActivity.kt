@@ -1,21 +1,21 @@
 package com.jdadminapp
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 
 class PinActivity : AppCompatActivity() {
 
-    private lateinit var prefs: android.content.SharedPreferences
+    private lateinit var prefs: SharedPreferences
     private var entered = ""
     private var pending = ""
     private var mode = "verify" // "setup" | "confirm" | "verify"
@@ -28,20 +28,9 @@ class PinActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = openPrefs()
+        prefs = getSharedPreferences("jd_prefs", MODE_PRIVATE)
         mode = if (!prefs.contains("pin_hash") || !prefs.contains("bearer_token")) "setup" else "verify"
         buildUI()
-    }
-
-    private fun openPrefs(): android.content.SharedPreferences = try {
-        val mk = MasterKey.Builder(this).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
-        EncryptedSharedPreferences.create(
-            this, "jd_prefs", mk,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    } catch (_: Exception) {
-        getSharedPreferences("jd_prefs", MODE_PRIVATE)
     }
 
     private fun buildUI() {
@@ -50,10 +39,12 @@ class PinActivity : AppCompatActivity() {
         scroll.addView(root)
         setContentView(scroll)
 
-        // Logo
+        // Logo badge
         root.addView(FrameLayout(this).apply {
             val s = 72.dp
-            layoutParams = LinearLayout.LayoutParams(s, s).also { it.gravity = Gravity.CENTER_HORIZONTAL }
+            layoutParams = LinearLayout.LayoutParams(s, s).also {
+                it.gravity = Gravity.CENTER_HORIZONTAL
+            }
             background = oval(accent, 36.dp)
             addView(TextView(this@PinActivity).apply {
                 text = "JD"; textSize = 28f; typeface = Typeface.DEFAULT_BOLD
@@ -63,21 +54,26 @@ class PinActivity : AppCompatActivity() {
         })
 
         root.addView(gap(14))
-        root.addView(text("JD Admin", 21f, Color.WHITE, bold = true))
+        root.addView(label("JD Admin", 21f, Color.WHITE, bold = true))
         root.addView(gap(4))
 
-        statusText = text("", 13f, Color.parseColor("#8a91a8"))
+        statusText = label("", 13f, Color.parseColor("#8a91a8"))
         root.addView(statusText)
         root.addView(gap(20))
 
-        if (mode == "setup") { root.addView(setupFields()); root.addView(gap(20)) }
+        if (mode == "setup") {
+            root.addView(setupFields())
+            root.addView(gap(20))
+        }
 
         // PIN dots row
         val dotRow = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        dots = Array(4) {
+        dots = Array(4) { _ ->
             View(this@PinActivity).apply {
                 val s = 14.dp
-                layoutParams = LinearLayout.LayoutParams(s, s).also { p -> p.setMargins(10.dp, 0, 10.dp, 0) }
+                layoutParams = LinearLayout.LayoutParams(s, s).also { p ->
+                    p.setMargins(10.dp, 0, 10.dp, 0)
+                }
                 background = oval(dimColor, 7.dp)
             }
         }
@@ -85,7 +81,7 @@ class PinActivity : AppCompatActivity() {
         root.addView(dotRow)
         root.addView(gap(8))
 
-        errorText = text("", 12f, Color.parseColor("#ef4444"))
+        errorText = label("", 12f, Color.parseColor("#ef4444"))
         root.addView(errorText)
         root.addView(gap(16))
 
@@ -95,11 +91,11 @@ class PinActivity : AppCompatActivity() {
 
     private fun setupFields(): LinearLayout {
         val c = col().apply { setPadding(40.dp, 0, 40.dp, 0) }
-        c.addView(smallLabel("Server URL"))
+        c.addView(label("Server URL", 12f, Color.parseColor("#8a91a8")))
         urlEdit = input(prefs.getString("server_url", "http://172.29.137.139:8080") ?: "")
         c.addView(urlEdit)
         c.addView(gap(10))
-        c.addView(smallLabel("Bearer Token"))
+        c.addView(label("Bearer Token", 12f, Color.parseColor("#8a91a8")))
         tokenEdit = input("", password = true).apply { hint = "jdadmin-..." }
         c.addView(tokenEdit)
         return c
@@ -126,7 +122,10 @@ class PinActivity : AppCompatActivity() {
     }
 
     private fun onKey(k: String) {
-        if (k == "⌫") { if (entered.isNotEmpty()) { entered = entered.dropLast(1); refresh() }; return }
+        if (k == "⌫") {
+            if (entered.isNotEmpty()) { entered = entered.dropLast(1); refresh() }
+            return
+        }
         if (entered.length >= 4) return
         entered += k; refresh()
         if (entered.length == 4) complete()
@@ -160,11 +159,16 @@ class PinActivity : AppCompatActivity() {
         }
     }
 
-    private fun go() { startActivity(Intent(this, MainActivity::class.java)); finish() }
+    private fun go() {
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
+    }
 
     private fun refresh() {
         errorText.text = ""
-        dots.forEachIndexed { i, v -> v.background = oval(if (i < entered.length) accent else dimColor, 7.dp) }
+        dots.forEachIndexed { i, v ->
+            v.background = oval(if (i < entered.length) accent else dimColor, 7.dp)
+        }
     }
 
     private fun updateStatus() {
@@ -176,12 +180,15 @@ class PinActivity : AppCompatActivity() {
         refresh()
     }
 
-    private fun sha256(s: String) = MessageDigest.getInstance("SHA-256")
-        .digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun sha256(s: String): String =
+        MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
+            .joinToString("") { "%02x".format(it) }
 
-    private fun oval(hex: String, r: Int) = GradientDrawable().apply {
-        shape = GradientDrawable.OVAL; setColor(Color.parseColor(hex))
-    }
+    private fun oval(hex: String, @Suppress("UNUSED_PARAMETER") r: Int) =
+        GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor(hex))
+        }
 
     private fun col(gravity: Int = Gravity.NO_GRAVITY) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -190,14 +197,11 @@ class PinActivity : AppCompatActivity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
 
-    private fun text(t: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
-        text = t; textSize = size; setTextColor(color); gravity = Gravity.CENTER
-        if (bold) typeface = Typeface.DEFAULT_BOLD
-    }
-
-    private fun smallLabel(t: String) = TextView(this).apply {
-        text = t; textSize = 12f; setTextColor(Color.parseColor("#8a91a8"))
-    }
+    private fun label(t: String, size: Float, color: Int, bold: Boolean = false) =
+        TextView(this).apply {
+            text = t; textSize = size; setTextColor(color); gravity = Gravity.CENTER
+            if (bold) typeface = Typeface.DEFAULT_BOLD
+        }
 
     private fun input(default: String, password: Boolean = false) = EditText(this).apply {
         setText(default); textSize = 13f; setTextColor(Color.WHITE)
@@ -209,7 +213,7 @@ class PinActivity : AppCompatActivity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
 
-    private fun gap(dp: Int) = android.view.View(this).apply {
+    private fun gap(dp: Int) = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp.dp)
     }
 
