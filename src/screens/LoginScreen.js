@@ -3,7 +3,6 @@ import {
   Animated, Easing, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
-import ReactNativeBiometrics from 'react-native-biometrics';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AuthContext} from '../context/AuthContext';
 import {getBaseUrl, hasPinSet, saveCredentials, saveToken, savePin, verifyPin} from '../api/client';
@@ -26,7 +25,6 @@ export default function LoginScreen() {
   const [lockout,    setLockout]    = useState(0);
   const [errMsg,     setErrMsg]     = useState('');
   const shakeX = useRef(new Animated.Value(0)).current;
-  const rnBio  = useRef((() => { try { return new ReactNativeBiometrics(); } catch { return null; } })()).current;
 
   useEffect(() => {
     if (lockout <= 0) return;
@@ -42,18 +40,6 @@ export default function LoginScreen() {
       Animated.timing(shakeX, {toValue:  0, duration: 60, useNativeDriver: true, easing: Easing.linear}),
     ]).start();
   }, [shakeX]);
-
-  const tryBiometric = useCallback(async () => {
-    if (!rnBio) return;
-    try {
-      const {success} = await rnBio.simplePrompt({promptMessage: 'Unlock JD Admin'});
-      if (success) setIsAuthenticated(true);
-    } catch {}
-  }, [rnBio, setIsAuthenticated]);
-
-  useEffect(() => {
-    if (isConfigured) tryBiometric();
-  }, [isConfigured, tryBiometric]);
 
   // Auto-submit when 4 digits entered
   useEffect(() => {
@@ -114,10 +100,8 @@ export default function LoginScreen() {
     if (!pinSet) {
       setSettingPin(true);
       setErrMsg('Set a 4-digit PIN to protect the app');
-    } else {
-      tryBiometric();
     }
-  }, [serverUrl, token, setIsConfigured, tryBiometric]);
+  }, [serverUrl, token, setIsConfigured]);
 
   const locked = lockout > 0;
 
@@ -199,10 +183,6 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
-            <TouchableOpacity style={styles.bioBtn} onPress={tryBiometric}>
-              <Text style={styles.bioBtnTxt}>👆  Use Biometric</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity onPress={() => setConfigMode(true)}>
               <Text style={styles.configLink}>Update bearer token</Text>
