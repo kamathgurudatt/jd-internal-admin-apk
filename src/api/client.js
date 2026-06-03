@@ -1,25 +1,40 @@
 import EncryptedStorage from 'react-native-encrypted-storage';
 
-// ── Baked-in server URL — change this before building the APK ─────────────────
-// TODO: Replace with your actual public endpoint before building
-// e.g. 'https://abc123.trycloudflare.com' or 'https://jd-admin.yourdomain.com'
-// Cloudflare Tunnel — accessible from anywhere, no VPN needed.
-// Note: trycloudflare.com URLs are temporary (change on restart).
-// For a permanent URL, set up a named tunnel with a Cloudflare account.
-export const BASE_URL = 'https://neon-solid-qualifications-armed.trycloudflare.com';
+// Default URL — used only on first install. User can change in Settings.
+const DEFAULT_URL = 'https://neon-solid-qualifications-armed.trycloudflare.com';
 
 const KEYS = {
-  TOKEN: 'jd_bearer_token',
-  PIN:   'jd_pin_hash',
+  BASE_URL: 'jd_base_url',
+  TOKEN:    'jd_bearer_token',
+  PIN:      'jd_pin_hash',
 };
 
-let _token = null;
+let _baseUrl = null;
+let _token   = null;
 
+// ── Credentials ───────────────────────────────────────────────────────────────
 export async function loadCredentials() {
-  _token = await EncryptedStorage.getItem(KEYS.TOKEN);
+  _baseUrl = (await EncryptedStorage.getItem(KEYS.BASE_URL)) || DEFAULT_URL;
+  _token   = await EncryptedStorage.getItem(KEYS.TOKEN);
   return !!_token;
 }
 
+export async function saveCredentials(url, token) {
+  const clean = url.replace(/\/$/, '');
+  await EncryptedStorage.setItem(KEYS.BASE_URL, clean);
+  await EncryptedStorage.setItem(KEYS.TOKEN, token.trim());
+  _baseUrl = clean;
+  _token   = token.trim();
+}
+
+// Update URL only (without changing token)
+export async function saveBaseUrl(url) {
+  const clean = url.replace(/\/$/, '');
+  await EncryptedStorage.setItem(KEYS.BASE_URL, clean);
+  _baseUrl = clean;
+}
+
+// Update token only (without changing URL)
 export async function saveToken(token) {
   await EncryptedStorage.setItem(KEYS.TOKEN, token.trim());
   _token = token.trim();
@@ -35,8 +50,7 @@ export async function verifyPin(pin) {
 }
 
 export async function hasPinSet() {
-  const p = await EncryptedStorage.getItem(KEYS.PIN);
-  return !!p;
+  return !!(await EncryptedStorage.getItem(KEYS.PIN));
 }
 
 export async function clearAll() {
@@ -45,13 +59,13 @@ export async function clearAll() {
   _token = null;
 }
 
-export function getBaseUrl() { return BASE_URL; }
+export function getBaseUrl() { return _baseUrl || DEFAULT_URL; }
 export function getToken()   { return _token; }
 
 // ── Core fetch ────────────────────────────────────────────────────────────────
 export async function apiFetch(path, options = {}) {
   if (!_token) {
-    throw Object.assign(new Error('Not configured'), {code: 'NOT_CONFIGURED'});
+    throw Object.assign(new Error('Not configured'), { code: 'NOT_CONFIGURED' });
   }
 
   let resp;
@@ -65,24 +79,23 @@ export async function apiFetch(path, options = {}) {
       },
     });
   } catch (e) {
-    throw Object.assign(new Error('Network error'), {code: 'NETWORK'});
+    throw Object.assign(new Error('Network error'), { code: 'NETWORK' });
   }
 
   if (resp.status === 401) {
     await EncryptedStorage.removeItem(KEYS.TOKEN);
     _token = null;
-
-    throw Object.assign(new Error('Unauthorized'), {code: 'AUTH_FAILED'});
+    throw Object.assign(new Error('Unauthorized'), { code: 'AUTH_FAILED' });
   }
   if (!resp.ok) {
-    throw Object.assign(new Error(`HTTP ${resp.status}`), {code: 'HTTP_ERROR', status: resp.status});
+    throw Object.assign(new Error(`HTTP ${resp.status}`), { code: 'HTTP_ERROR', status: resp.status });
   }
   return resp.json();
 }
 
 // ── Convenience methods ───────────────────────────────────────────────────────
 export const api = {
-  get:    path          => apiFetch(path),
-  post:   (path, body)  => apiFetch(path, {method: 'POST',   body: JSON.stringify(body)}),
-  delete: path          => apiFetch(path, {method: 'DELETE'}),
+  get:    path         => apiFetch(path),
+  post:   (path, body) => apiFetch(path, { method: 'POST',   body: JSON.stringify(body) }),
+  delete: path         => apiFetch(path, { method: 'DELETE' }),
 };

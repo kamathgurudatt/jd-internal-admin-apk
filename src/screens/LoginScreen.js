@@ -6,7 +6,7 @@ import {
 import ReactNativeBiometrics from 'react-native-biometrics';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AuthContext} from '../context/AuthContext';
-import {BASE_URL, hasPinSet, saveToken, savePin, verifyPin} from '../api/client';
+import {getBaseUrl, hasPinSet, saveCredentials, saveToken, savePin, verifyPin} from '../api/client';
 import {colors} from '../theme/colors';
 
 const MAX_ATTEMPTS = 5;
@@ -20,6 +20,7 @@ export default function LoginScreen() {
   const [settingPin, setSettingPin] = useState(false);
   const [confirmPin, setConfirmPin] = useState('');
   const [configMode, setConfigMode] = useState(!isConfigured);
+  const [serverUrl,  setServerUrl]  = useState(getBaseUrl());
   const [token,      setToken]      = useState('');
   const [attempts,   setAttempts]   = useState(0);
   const [lockout,    setLockout]    = useState(0);
@@ -104,8 +105,9 @@ export default function LoginScreen() {
   }, [lockout]);
 
   const saveConfig = useCallback(async () => {
+    if (!serverUrl.startsWith('http')) { setErrMsg('URL must start with http/https'); return; }
     if (!token) { setErrMsg('Bearer token is required'); return; }
-    await saveToken(token);
+    await saveCredentials(serverUrl, token);
     setIsConfigured(true);
     setConfigMode(false);
     const pinSet = await hasPinSet();
@@ -115,7 +117,7 @@ export default function LoginScreen() {
     } else {
       tryBiometric();
     }
-  }, [token, setIsConfigured, tryBiometric]);
+  }, [serverUrl, token, setIsConfigured, tryBiometric]);
 
   const locked = lockout > 0;
 
@@ -129,15 +131,26 @@ export default function LoginScreen() {
         <View style={styles.logo}><Text style={styles.logoTxt}>JD</Text></View>
         <Text style={styles.appName}>JD Admin</Text>
         <Text style={styles.appSub}>Internal Tools Manager</Text>
-        <Text style={styles.serverUrl}>{BASE_URL}</Text>
+        <Text style={styles.serverUrl} numberOfLines={1}>{serverUrl}</Text>
 
-        {/* Token config (first launch) */}
+        {/* Token + URL config (first launch) */}
         {configMode && (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>⚙ FIRST-TIME SETUP</Text>
             </View>
-            <Text style={styles.fieldLabel}>Admin Bearer Token</Text>
+            <Text style={styles.fieldLabel}>Server URL</Text>
+            <TextInput
+              style={styles.input}
+              value={serverUrl}
+              onChangeText={setServerUrl}
+              placeholder="https://your-tunnel-url.com"
+              placeholderTextColor={colors.text2}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            <Text style={[styles.fieldLabel, {marginTop: 10}]}>Admin Bearer Token</Text>
             <TextInput
               style={styles.input}
               value={token}

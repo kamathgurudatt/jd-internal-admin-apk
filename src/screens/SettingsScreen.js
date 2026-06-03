@@ -2,7 +2,7 @@ import React, {useCallback, useContext, useEffect, useState} from 'react';
 import {KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AuthContext} from '../context/AuthContext';
-import {BASE_URL, clearAll, getToken, saveToken, savePin} from '../api/client';
+import {getBaseUrl, clearAll, getToken, saveToken, saveBaseUrl, savePin} from '../api/client';
 import {colors} from '../theme/colors';
 
 const AUTO_LOCK_OPTIONS = [2, 5, 10, 15, 30];
@@ -10,6 +10,7 @@ const AUTO_LOCK_OPTIONS = [2, 5, 10, 15, 30];
 export default function SettingsScreen({navigation}) {
   const {bottom} = useSafeAreaInsets();
   const {setIsAuthenticated, setIsConfigured} = useContext(AuthContext);
+  const [serverUrl, setServerUrl] = useState('');
   const [token,   setToken]   = useState('');
   const [showTok, setShowTok] = useState(false);
   const [lockMin, setLockMin] = useState(5);
@@ -19,10 +20,19 @@ export default function SettingsScreen({navigation}) {
   const [flash,   setFlash]   = useState('');
 
   useEffect(() => {
+    setServerUrl(getBaseUrl() || '');
     setToken(getToken() || '');
   }, []);
 
   const showFlash = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2500); };
+
+  const saveServer = useCallback(async () => {
+    if (!serverUrl.startsWith('http')) { showFlash('URL must start with http/https'); return; }
+    setSaving(true);
+    await saveBaseUrl(serverUrl);
+    setSaving(false);
+    showFlash('Server URL saved ✓');
+  }, [serverUrl]);
 
   const saveTok = useCallback(async () => {
     if (!token) { showFlash('Token is required'); return; }
@@ -58,12 +68,23 @@ export default function SettingsScreen({navigation}) {
 
         {flash ? <View style={styles.flashBanner}><Text style={styles.flashTxt}>{flash}</Text></View> : null}
 
-        {/* Server (read-only URL + editable token) */}
+        {/* Server — both URL and token are now editable */}
         <Text style={styles.section}>Server</Text>
         <View style={styles.group}>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Server URL</Text>
-            <Text style={styles.rowVal} numberOfLines={1}>{BASE_URL}</Text>
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowLabel}>Server URL</Text>
+              <TextInput
+                style={styles.rowInput}
+                value={serverUrl}
+                onChangeText={setServerUrl}
+                placeholder="https://your-tunnel-url.com"
+                placeholderTextColor={colors.text2}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+            </View>
           </View>
           <View style={styles.divider} />
           <View style={styles.row}>
@@ -83,9 +104,14 @@ export default function SettingsScreen({navigation}) {
             </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity style={styles.saveBtn} onPress={saveTok} disabled={saving}>
-          <Text style={styles.saveBtnTxt}>{saving ? 'Saving…' : 'Update Token'}</Text>
-        </TouchableOpacity>
+        <View style={{flexDirection:'row', gap:8}}>
+          <TouchableOpacity style={[styles.saveBtn,{flex:1}]} onPress={saveServer} disabled={saving}>
+            <Text style={styles.saveBtnTxt}>Save URL</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.saveBtn,{flex:1}]} onPress={saveTok} disabled={saving}>
+            <Text style={styles.saveBtnTxt}>Save Token</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Security */}
         <Text style={styles.section}>Security</Text>
