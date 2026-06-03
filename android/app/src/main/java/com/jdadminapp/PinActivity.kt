@@ -10,6 +10,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import java.security.MessageDigest
 
@@ -86,6 +87,18 @@ class PinActivity : AppCompatActivity() {
         root.addView(gap(16))
 
         root.addView(numpad())
+        root.addView(gap(16))
+
+        // Settings link — change server URL/token without clearing app data
+        root.addView(TextView(this).apply {
+            text = "⚙ Change server URL / token"
+            textSize = 12f
+            setTextColor(Color.parseColor("#3e4560"))
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 0)
+            setOnClickListener { showSettings() }
+        })
+
         updateStatus()
     }
 
@@ -162,6 +175,41 @@ class PinActivity : AppCompatActivity() {
     private fun go() {
         startActivity(Intent(this, MainActivity::class.java))
         finish()
+    }
+
+    private fun showSettings() {
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 8)
+        }
+        val currentUrl = prefs.getString("server_url", "") ?: ""
+        val urlField = EditText(this).apply {
+            setText(currentUrl); textSize = 13f
+            hint = "http://172.29.137.139:8080"
+        }
+        val tokenField = EditText(this).apply {
+            textSize = 13f; hint = "jdadmin-..."
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        layout.addView(TextView(this).apply { text = "Server URL"; textSize = 12f; setTextColor(Color.GRAY) })
+        layout.addView(urlField)
+        layout.addView(TextView(this).apply {
+            text = "Bearer Token (leave blank to keep current)"; textSize = 12f
+            setTextColor(Color.GRAY); setPadding(0, 12, 0, 0)
+        })
+        layout.addView(tokenField)
+
+        AlertDialog.Builder(this)
+            .setTitle("Update Server Settings")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                val newUrl = urlField.text.toString().trim()
+                val newTok = tokenField.text.toString().trim()
+                if (newUrl.isNotEmpty()) prefs.edit().putString("server_url", newUrl).apply()
+                if (newTok.isNotEmpty()) prefs.edit().putString("bearer_token", newTok).apply()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun refresh() {
