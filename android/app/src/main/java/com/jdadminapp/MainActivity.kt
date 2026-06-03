@@ -290,9 +290,12 @@ class MainActivity : AppCompatActivity() {
     private fun makeWebView(path: String): WebView = WebView(this).apply {
         setBackgroundColor(BG)
         settings.apply {
-            javaScriptEnabled    = true; domStorageEnabled = true
-            loadWithOverviewMode = true; useWideViewPort   = true
-            builtInZoomControls  = false; displayZoomControls = false
+            javaScriptEnabled    = true
+            domStorageEnabled    = true
+            useWideViewPort      = false  // respect page's width=device-width viewport
+            loadWithOverviewMode = false  // don't zoom out to fit desktop width
+            builtInZoomControls  = true   // allow pinch-to-zoom as fallback
+            displayZoomControls  = false  // hide on-screen +/- buttons
             mixedContentMode     = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             @Suppress("DEPRECATION") savePassword = false
         }
@@ -320,6 +323,15 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) { null }
             }
             override fun onPageFinished(view: WebView, url: String) {
+                // Force mobile viewport so pages render at device width
+                view.evaluateJavascript("""
+                    (function(){
+                      var m=document.querySelector('meta[name=viewport]');
+                      if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}
+                      m.content='width=device-width,initial-scale=1.0,maximum-scale=5.0,user-scalable=yes';
+                    })();
+                """.trimIndent(), null)
+
                 val t = token.replace("\\", "\\\\").replace("'", "\\'")
                 view.evaluateJavascript("""
                     (function(){if(window.__jdA)return;window.__jdA=true;var T='$t';
