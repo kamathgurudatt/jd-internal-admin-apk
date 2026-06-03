@@ -14,7 +14,7 @@ android {
         targetSdk     rootProject.ext.targetSdkVersion
         versionCode   1
         versionName   "1.0.0"
-        ndk { abiFilters "arm64-v8a" }
+        // abiFilters removed — build for all ABIs to prevent silent ABI mismatch crashes
     }
 
     signingConfigs {
