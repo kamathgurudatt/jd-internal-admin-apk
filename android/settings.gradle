@@ -16,18 +16,4 @@ rootProject.name = 'JDAdminApp'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
 
-// Manual native module inclusion
-include ':react-native-screens'
-project(':react-native-screens').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-screens/android')
-
-include ':react-native-safe-area-context'
-project(':react-native-safe-area-context').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-safe-area-context/android')
-
-include ':react-native-gesture-handler'
-project(':react-native-gesture-handler').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-gesture-handler/android')
-
-include ':react-native-encrypted-storage'
-project(':react-native-encrypted-storage').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-encrypted-storage/android')
-
-// react-native-biometrics REMOVED — crashes native registration on devices
-// without proper biometric hardware. Can be re-added once app is stable.
+// DIAGNOSTIC BUILD: all native modules removed to isolate crash cause
